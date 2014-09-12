@@ -8,9 +8,6 @@ import it.unitn.disi.annotation.data.INLPContext;
 import it.unitn.disi.annotation.data.INLPNode;
 import it.unitn.disi.annotation.loaders.context.INLPContextLoader;
 import it.unitn.disi.annotation.renderers.context.INLPContextRenderer;
-import it.unitn.disi.common.components.Configurable;
-import it.unitn.disi.common.components.ConfigurableException;
-import it.unitn.disi.common.utils.MiscUtils;
 import it.unitn.disi.nlptools.NLPToolsConstants;
 import it.unitn.disi.nlptools.NLPToolsException;
 import it.unitn.disi.nlptools.components.PipelineComponentException;
@@ -19,6 +16,7 @@ import it.unitn.disi.nlptools.data.IToken;
 import it.unitn.disi.nlptools.data.Label;
 import it.unitn.disi.nlptools.data.Token;
 import it.unitn.disi.nlptools.pipelines.ILabelPipelineComponent;
+import it.unitn.disi.smatch.SMatchException;
 import it.unitn.disi.smatch.data.trees.IBaseNode;
 import it.unitn.disi.smatch.data.trees.IBaseNodeData;
 import it.unitn.disi.smatch.gui.SMatchGUI;
@@ -26,7 +24,10 @@ import it.unitn.disi.smatch.loaders.context.ContextLoaderException;
 import it.unitn.disi.smatch.renderers.context.ContextRendererException;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.apache.log4j.PropertyConfigurator;
+import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.context.support.FileSystemXmlApplicationContext;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.PropertiesPropertySource;
 
 import javax.swing.*;
 import javax.swing.event.ListSelectionEvent;
@@ -36,7 +37,6 @@ import java.awt.*;
 import java.awt.event.*;
 import java.io.File;
 import java.io.IOException;
-import java.rmi.RemoteException;
 import java.util.*;
 import java.util.List;
 
@@ -45,9 +45,9 @@ import java.util.List;
  *
  * @author <a rel="author" href="http://autayeu.com/">Aliaksandr Autayeu</a>
  */
-public class POSAnnotationTool extends Configurable {
+public class POSAnnotationTool {
 
-    private static Logger log;
+    private static final Logger log;
 
     static {
         log = Logger.getLogger(POSAnnotationTool.class);
@@ -55,24 +55,24 @@ public class POSAnnotationTool extends Configurable {
         iconUncoalesceSmall = icon.getIcon(SMatchGUI.SMALL_ICON_SIZE);
     }
 
-    private static final String CONF_FILE = ".." + File.separator + "conf" + File.separator + "annotation.properties";
+    private static final String CONF_FILE = ".." + File.separator + "conf" + File.separator + "annotation.xml";
     private static final String LOOK_AND_FEEL_KEY = "LookAndFeel";
     private String lookAndFeel = null;
 
-    private static final String TAG_ORDER = "tagOrder";
+    private static final String TAG_ORDER_KEY = "tagOrder";
     List<String> tagOrder = Arrays.asList(NLPToolsConstants.ARR_POS_ALL);
 
     private static final String CONTEXT_LOADER_KEY = "contextLoader";
-    private INLPContextLoader contextLoader;
+    private final INLPContextLoader contextLoader;
 
     private static final String CONTEXT_RENDERER_KEY = "contextRenderer";
-    private INLPContextRenderer contextRenderer;
+    private final INLPContextRenderer contextRenderer;
 
     private static final String TOKENIZER_KEY = "tokenizer";
-    private ILabelPipelineComponent tokenizer;
+    private final ILabelPipelineComponent tokenizer;
 
     private static final String POS_TAGGER_KEY = "postagger";
-    private ILabelPipelineComponent postagger;
+    private final ILabelPipelineComponent postagger;
 
     private String inputFileName = null;
     //allows loading other datasets to be used as label dictionaries. semicolon-separated list
@@ -84,17 +84,17 @@ public class POSAnnotationTool extends Configurable {
     private int curIndex = -1;
 
     //panels with interface for phrases to avoid flicker when going force-n-back
-    private final ArrayList<JPanel> phrasePanels = new ArrayList<JPanel>();
+    private final List<JPanel> phrasePanels = new ArrayList<>();
     private JPanel curPhrasePanel = null;
 
     private String datasetSizeString = "";
 
-    private static Icon iconUncoalesceSmall;
+    private static final Icon iconUncoalesceSmall;
 
-    private Action prevAction = new PrevAction("Prev", "Go to previous item", KeyEvent.VK_P);
-    private Action nextAction = new NextAction("Next", "Go to next item", KeyEvent.VK_N);
-    private Action nextNNPAction = new NextNNPAction("NNP && Next", "Mark all NNP and go to next item", KeyEvent.VK_X);
-    private Action prevTagsAction = new PrevTagsAction("Prev Tags", "Load tags from previous item", KeyEvent.VK_T);
+    private final Action prevAction = new PrevAction("Prev", "Go to previous item", KeyEvent.VK_P);
+    private final Action nextAction = new NextAction("Next", "Go to next item", KeyEvent.VK_N);
+    private final Action nextNNPAction = new NextNNPAction("NNP && Next", "Mark all NNP and go to next item", KeyEvent.VK_X);
+    private final Action prevTagsAction = new PrevTagsAction("Prev Tags", "Load tags from previous item", KeyEvent.VK_T);
 
     //magics used in binding components for data elements
     //ILabel, binds phrase objects to interface objects
@@ -116,7 +116,7 @@ public class POSAnnotationTool extends Configurable {
     private static JScrollPane spSource;
 
     //label -> tagged label:  token \t tag \t\t ...
-    private static final HashMap<String, String> taggedPOS = new HashMap<String, String>();
+    private static final HashMap<String, String> taggedPOS = new HashMap<>();
 
     class NavAction extends AbstractAction {
         public NavAction(String text, String desc, Integer mnemonic) {
@@ -331,8 +331,7 @@ public class POSAnnotationTool extends Configurable {
                     //String newText = node.getNodeData().getName() + " (" + posPattern + ")";
                     //setText(newText);
                 }
-            } else
-            if (value instanceof DefaultMutableTreeNode) {
+            } else if (value instanceof DefaultMutableTreeNode) {
                 DefaultMutableTreeNode dmtn = (DefaultMutableTreeNode) value;
                 if (dmtn.getUserObject() instanceof SMatchGUI.BaseCoalesceTreeModel.Coalesce) {
                     SMatchGUI.BaseCoalesceTreeModel.Coalesce c = (SMatchGUI.BaseCoalesceTreeModel.Coalesce) dmtn.getUserObject();
@@ -421,53 +420,8 @@ public class POSAnnotationTool extends Configurable {
         }
     }
 
-    @Override
-    public boolean setProperties(Properties newProperties) throws ConfigurableException {
-        if (log.isEnabledFor(Level.INFO)) {
-            log.info("Loading configuration...");
-        }
-        Properties oldProperties = new Properties();
-        oldProperties.putAll(properties);
-        boolean result = super.setProperties(newProperties);
-        if (result) {
-            if (newProperties.containsKey(LOOK_AND_FEEL_KEY)) {
-                lookAndFeel = newProperties.getProperty(LOOK_AND_FEEL_KEY);
-            }
-
-            if (newProperties.containsKey(TAG_ORDER)) {
-                String order = newProperties.getProperty(TAG_ORDER);
-
-                String[] tags = order.split("\t");
-                tagOrder = new ArrayList<String>(Arrays.asList(tags));
-                for (String t : NLPToolsConstants.ARR_POS_ALL) {
-                    if (!tagOrder.contains(t)) {
-                        tagOrder.add(t);
-                    }
-                }
-            }
-
-            contextLoader = (INLPContextLoader) configureComponent(contextLoader, oldProperties, newProperties, "context loader", CONTEXT_LOADER_KEY, INLPContextLoader.class);
-            contextRenderer = (INLPContextRenderer) configureComponent(contextRenderer, oldProperties, newProperties, "context renderer", CONTEXT_RENDERER_KEY, INLPContextRenderer.class);
-            tokenizer = (ILabelPipelineComponent) configureComponent(tokenizer, oldProperties, newProperties, "tokenizer", TOKENIZER_KEY, ILabelPipelineComponent.class);
-            postagger = (ILabelPipelineComponent) configureComponent(postagger, oldProperties, newProperties, "POS tagger", POS_TAGGER_KEY, ILabelPipelineComponent.class);
-        }
-        return result;
-    }
-
     private void createCurrentPhrasePanel() {
-        try {
-            curPhrasePanel = buildPhrasePanel(data.get(curIndex).getNodeData().getLabel());
-        } catch (NLPToolsException e) {
-            if (log.isEnabledFor(Level.ERROR)) {
-                log.error("NLPToolsException: ", e);
-            }
-            curPhrasePanel = null;
-        } catch (RemoteException e) {
-            if (log.isEnabledFor(Level.ERROR)) {
-                log.error("RemoteException: ", e);
-            }
-            curPhrasePanel = null;
-        }
+        curPhrasePanel = buildPhrasePanel(data.get(curIndex).getNodeData().getLabel());
         if ((-1 < curIndex) && (curIndex < phrasePanels.size())) {
             phrasePanels.set(curIndex, curPhrasePanel);
         } else {
@@ -479,7 +433,7 @@ public class POSAnnotationTool extends Configurable {
         tokensScroll.repaint();
     }
 
-    private JPanel buildPhrasePanel(ILabel curPhrase) throws NLPToolsException, RemoteException {
+    private JPanel buildPhrasePanel(ILabel curPhrase) {
         JPanel result = null;
         //http://java.sun.com/docs/books/tutorial/uiswing/misc/keybinding.html
         //TODO: hotkey for each token: 1,2,3,4...9,0  ?A,B,C?
@@ -686,9 +640,9 @@ public class POSAnnotationTool extends Configurable {
     }
 
     private JList buildTokenPOSList(ILabel label, IToken token) {
-        JList posList = new JList();
+        JList<String> posList = new JList<>();
         posList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        DefaultListModel model = new DefaultListModel();
+        DefaultListModel<String> model = new DefaultListModel<>();
         for (String pos : tagOrder) {
             model.addElement(pos);
         }
@@ -726,7 +680,7 @@ public class POSAnnotationTool extends Configurable {
     }
 
     //listener for token pos combobox
-    private ListSelectionListener tokenPOSListSelectionListener = new ListSelectionListener() {
+    private final ListSelectionListener tokenPOSListSelectionListener = new ListSelectionListener() {
         public void valueChanged(ListSelectionEvent e) {
             if (e.getSource() instanceof JList) {
                 JList source = (JList) e.getSource();
@@ -776,8 +730,34 @@ public class POSAnnotationTool extends Configurable {
         }
     }
 
+    @SuppressWarnings("unchecked")
     public POSAnnotationTool(String inputFile) {
         inputFileName = inputFile;
+
+        log.info("Loading configuration...");
+        ConfigurableApplicationContext applicationContext = new FileSystemXmlApplicationContext(CONF_FILE);
+        applicationContext.getEnvironment().getPropertySources().addLast(
+                new PropertiesPropertySource("propertiesSource", applicationContext.getBean("properties", Properties.class)));
+        Environment e = applicationContext.getEnvironment();
+
+        if (e.containsProperty(LOOK_AND_FEEL_KEY)) {
+            lookAndFeel = e.getProperty(LOOK_AND_FEEL_KEY);
+        }
+
+        if (e.containsProperty(TAG_ORDER_KEY)) {
+            String[] tags = e.getProperty(TAG_ORDER_KEY).split("-");
+            tagOrder = new ArrayList<>(Arrays.asList(tags));
+            for (String t : NLPToolsConstants.ARR_POS_ALL) {
+                if (!tagOrder.contains(t)) {
+                    tagOrder.add(t);
+                }
+            }
+        }
+
+        contextLoader = applicationContext.getBean(CONTEXT_LOADER_KEY, INLPContextLoader.class);
+        contextRenderer = applicationContext.getBean(CONTEXT_RENDERER_KEY, INLPContextRenderer.class);
+        tokenizer = applicationContext.getBean(TOKENIZER_KEY, ILabelPipelineComponent.class);
+        postagger = applicationContext.getBean(POS_TAGGER_KEY, ILabelPipelineComponent.class);
     }
 
     private void loadLabelAndPath() {
@@ -922,7 +902,7 @@ public class POSAnnotationTool extends Configurable {
             log.info("Loading: " + file);
             int oldSize = taggedPOS.size();
 
-            HashSet<String> conflicts = new HashSet<String>();
+            Set<String> conflicts = new HashSet<>();
             INLPContext c = contextLoader.loadContext(file);
             for (Iterator<INLPNode> i = c.getNodes(); i.hasNext(); ) {
                 ILabel label = i.next().getNodeData().getLabel();
@@ -950,21 +930,9 @@ public class POSAnnotationTool extends Configurable {
         if (null != lookAndFeel) {
             try {
                 UIManager.setLookAndFeel(lookAndFeel);
-            } catch (ClassNotFoundException e) {
+            } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | UnsupportedLookAndFeelException e) {
                 if (log.isEnabledFor(Level.ERROR)) {
-                    log.error("ClassNotFoundException", e);
-                }
-            } catch (InstantiationException e) {
-                if (log.isEnabledFor(Level.ERROR)) {
-                    log.error("InstantiationException", e);
-                }
-            } catch (IllegalAccessException e) {
-                if (log.isEnabledFor(Level.ERROR)) {
-                    log.error("IllegalAccessException", e);
-                }
-            } catch (UnsupportedLookAndFeelException e) {
-                if (log.isEnabledFor(Level.ERROR)) {
-                    log.error("UnsupportedLookAndFeelException", e);
+                    log.error(e);
                 }
             }
         }
@@ -1084,13 +1052,12 @@ public class POSAnnotationTool extends Configurable {
         }
     };
 
-    public static void main(String[] args) throws ConfigurableException, ClassNotFoundException, IOException {
+    public static void main(String[] args) throws SMatchException, ClassNotFoundException, IOException, NLPToolsException {
         //analyze args
         if (0 == args.length) {
             System.out.println("Usage: POSAnnotationTool datasetFileName [" + loadAlsoCmdLineToken + "file1;file2;...;fileN]");
         } else {
             POSAnnotationTool tool = new POSAnnotationTool(args[0]);
-            tool.setProperties(CONF_FILE);
             if (2 == args.length && args[1].startsWith(loadAlsoCmdLineToken)) {
                 String loadAlsoFileNames = args[1].substring(loadAlsoCmdLineToken.length(), args[1].length());
                 tool.loadAlso(loadAlsoFileNames);

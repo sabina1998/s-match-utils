@@ -1,6 +1,5 @@
 package it.unitn.disi.smatch.loaders.context;
 
-import it.unitn.disi.common.components.ConfigurableException;
 import it.unitn.disi.smatch.data.trees.Context;
 import it.unitn.disi.smatch.data.trees.IContext;
 import it.unitn.disi.smatch.data.trees.INode;
@@ -15,7 +14,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.util.Properties;
 import java.util.Set;
 
 /**
@@ -23,7 +21,7 @@ import java.util.Set;
  * Takes in a topClass parameter, which defines the starting class. If not specified, the Thing will be used.
  * Takes in an excludeNothing parameter, which specifies whether to exclude Nothing class. Default true.
  * Takes in a replaceUnderscore parameter, which specifies whether to replace _ in class names. Default true.
- *
+ * <p/>
  * The loader uses class hierarchy from the ontology in question and loads it into a tree.
  * Currently, the loader follows subclass hierarchy.
  *
@@ -34,19 +32,27 @@ public class OWLContextLoader extends BaseContextLoader<IContext> implements ICo
     private static final Logger log = LoggerFactory.getLogger(OWLContextLoader.class);
 
     // class to start from, if not specified, a Thing will be used
-    private static final String TOP_CLASS_KEY = "topClass";
-    private String topClass = null;
+    private final String topClass;
 
     // whether to exclude Nothing class
-    private static final String EXCLUDE_NOTHING_KEY = "excludeNothing";
-    private boolean excludeNothing = true;
+    private final boolean excludeNothing;
 
     // whether to replace _
-    private static final String REPLACE_UNDERSCORE_KEY = "replaceUnderscore";
-    private boolean replaceUnderscore = true;
+    private final boolean replaceUnderscore;
 
+    private static final OWLClass NOTHING_CLASS = OWLManager.getOWLDataFactory().getOWLClass(OWLRDFVocabulary.OWL_NOTHING.getIRI());
 
-    private static OWLClass NOTHING_CLASS = OWLManager.getOWLDataFactory().getOWLClass(OWLRDFVocabulary.OWL_NOTHING.getIRI());
+    public OWLContextLoader() {
+        topClass = null;
+        excludeNothing = true;
+        replaceUnderscore = true;
+    }
+
+    public OWLContextLoader(String topClass, boolean excludeNothing, boolean replaceUnderscore) {
+        this.topClass = topClass;
+        this.excludeNothing = excludeNothing;
+        this.replaceUnderscore = replaceUnderscore;
+    }
 
     /**
      * <p>Simple visitor that grabs any labels on an entity.</p>
@@ -108,26 +114,6 @@ public class OWLContextLoader extends BaseContextLoader<IContext> implements ICo
         public String getResult() {
             return result;
         }
-    }
-
-
-    @Override
-    public boolean setProperties(Properties newProperties) throws ConfigurableException {
-        boolean result = super.setProperties(newProperties);
-        if (result) {
-            if (newProperties.containsKey(TOP_CLASS_KEY)) {
-                topClass = newProperties.getProperty(TOP_CLASS_KEY);
-            }
-
-            if (newProperties.containsKey(EXCLUDE_NOTHING_KEY)) {
-                excludeNothing = Boolean.parseBoolean(newProperties.getProperty(EXCLUDE_NOTHING_KEY));
-            }
-
-            if (newProperties.containsKey(REPLACE_UNDERSCORE_KEY)) {
-                replaceUnderscore = Boolean.parseBoolean(newProperties.getProperty(REPLACE_UNDERSCORE_KEY));
-            }
-        }
-        return result;
     }
 
     public void buildHierarchy(OWLReasoner reasoner, OWLOntology o, IContext c, INode root, OWLClass clazz) throws OWLException {
@@ -195,7 +181,6 @@ public class OWLContextLoader extends BaseContextLoader<IContext> implements ICo
             }
 
             createIds(result);
-            log.info("Parsed nodes: " + nodesParsed);
         } catch (OWLException e) {
             throw new ContextLoaderException(e.getClass().getSimpleName() + ": " + e.getMessage(), e);
         }
@@ -210,7 +195,6 @@ public class OWLContextLoader extends BaseContextLoader<IContext> implements ICo
     public ILoader.LoaderType getType() {
         return ILoader.LoaderType.FILE;
     }
-
 
     private String labelFor(OWLOntology ontology, OWLClass clazz) {
         String result;

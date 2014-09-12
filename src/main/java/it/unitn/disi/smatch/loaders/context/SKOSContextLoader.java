@@ -1,6 +1,5 @@
 package it.unitn.disi.smatch.loaders.context;
 
-import it.unitn.disi.common.components.ConfigurableException;
 import it.unitn.disi.smatch.data.trees.Context;
 import it.unitn.disi.smatch.data.trees.IContext;
 import it.unitn.disi.smatch.data.trees.INode;
@@ -19,7 +18,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Loads a context from a SKOS file using SKOS API (based on OWL API) and HermiT reasoner.
@@ -34,25 +36,18 @@ public class SKOSContextLoader extends BaseContextLoader<IContext> implements IC
     private static final Logger log = LoggerFactory.getLogger(SKOSContextLoader.class);
 
     // which language to load, default "" - load anything
-    private static final String PREFERRED_LANGUAGE_KEY = "preferredLanguage";
-    private String preferredLanguage = "";
+    private final String preferredLanguage;
 
-    private static final String REASONER_PRECOMPUTE_KEY = "reasonerPrecompute";
-    private boolean precompute = true;
+    private final boolean precompute;
 
-    @Override
-    public boolean setProperties(Properties newProperties) throws ConfigurableException {
-        boolean result = super.setProperties(newProperties);
-        if (result) {
-            if (newProperties.containsKey(PREFERRED_LANGUAGE_KEY)) {
-                preferredLanguage = newProperties.getProperty(PREFERRED_LANGUAGE_KEY);
-            }
+    public SKOSContextLoader() {
+        preferredLanguage = "";
+        precompute = true;
+    }
 
-            if (newProperties.containsKey(REASONER_PRECOMPUTE_KEY)) {
-                precompute = Boolean.parseBoolean(newProperties.getProperty(REASONER_PRECOMPUTE_KEY));
-            }
-        }
-        return result;
+    public SKOSContextLoader(String preferredLanguage, boolean precompute) {
+        this.preferredLanguage = preferredLanguage;
+        this.precompute = precompute;
     }
 
     public IContext loadContext(String fileName) throws ContextLoaderException {
@@ -72,7 +67,7 @@ public class SKOSContextLoader extends BaseContextLoader<IContext> implements IC
             }
 
             // IRI - INode
-            Map<String, INode> conceptNode = new HashMap<String, INode>();
+            Map<String, INode> conceptNode = new HashMap<>();
             Set<SKOSConcept> skosConcepts = reasoner.getSKOSConcepts();
             if (log.isInfoEnabled()) {
                 log.info("Loaded SKOS concepts: " + skosConcepts.size());
@@ -133,7 +128,6 @@ public class SKOSContextLoader extends BaseContextLoader<IContext> implements IC
                 node.getNodeData().setProvenance(concept.getIRI().toString());
                 node.setUserObject(concept);
                 conceptNode.put(concept.getIRI().toString(), node);
-                nodesParsed++;
             }
 
             if (0 < unlabeledNodeCount) {
@@ -245,7 +239,7 @@ public class SKOSContextLoader extends BaseContextLoader<IContext> implements IC
                 log.info("Checking multiple roots...");
             }
             // check multiple roots
-            Set<INode> roots = new HashSet<INode>();
+            Set<INode> roots = new HashSet<>();
             for (SKOSConcept concept : skosConcepts) {
                 INode node = conceptNode.get(concept.getIRI().toString());
                 if (!node.hasParent()) {
@@ -282,7 +276,6 @@ public class SKOSContextLoader extends BaseContextLoader<IContext> implements IC
             }
 
             createIds(result);
-            log.info("Parsed nodes: " + nodesParsed);
         } catch (SKOSCreationException e) {
             throw new ContextLoaderException(e.getClass().getSimpleName() + ": " + e.getMessage(), e);
         }

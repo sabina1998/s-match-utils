@@ -1,8 +1,6 @@
 package it.unitn.disi.smatch.gui;
 
 import it.unitn.disi.common.DISIException;
-import it.unitn.disi.common.components.ConfigurableException;
-import it.unitn.disi.common.utils.MiscUtils;
 import it.unitn.disi.smatch.CLI;
 import it.unitn.disi.smatch.IMatchManager;
 import it.unitn.disi.smatch.MatchManager;
@@ -32,7 +30,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.Properties;
 
 /**
  * Provides basic S-Match GUI.
@@ -52,10 +49,10 @@ public class MatchingBasicGUI extends JPanel
 
     private static final String MAIN_ICON_FILE = "it/unitn/disi/smatch/gui/s-match.ico";
 
-    private JTree sourceTree;
-    private JTree targetTree;
-    private JSplitPane splitPane;
-    private JFileChooser fc;
+    private final JTree sourceTree;
+    private final JTree targetTree;
+    private final JSplitPane splitPane;
+    private final JFileChooser fc;
 
     //source and target contexts
     private IContext sourceContext;
@@ -70,15 +67,15 @@ public class MatchingBasicGUI extends JPanel
     JTextField mappingFileTxt;
 
     //hashes for paths with the index of the tree element
-    HashMap<INode, Integer> sourceRowForPath;
-    HashMap<INode, Integer> targetRowForPath;
+    final HashMap<INode, Integer> sourceRowForPath;
+    final HashMap<INode, Integer> targetRowForPath;
 
     //offsets to draw the lines when things mode around
-    private Point leftOffset = new Point(); //for source tree
-    private Point rightOffset = new Point(); //for target tree
+    private final Point leftOffset = new Point(); //for source tree
+    private final Point rightOffset = new Point(); //for target tree
 
     IContextMapping<INode> mappings = null;
-    private IMatchManager mm;
+    private final IMatchManager mm;
 
 
     public MatchingBasicGUI() throws DISIException, IOException {
@@ -90,8 +87,8 @@ public class MatchingBasicGUI extends JPanel
         sourceTree = new JTree(new DefaultMutableTreeNode("Load source"));
         targetTree = new JTree(new DefaultMutableTreeNode("Load target"));
 
-        sourceRowForPath = new HashMap<INode, Integer>();
-        targetRowForPath = new HashMap<INode, Integer>();
+        sourceRowForPath = new HashMap<>();
+        targetRowForPath = new HashMap<>();
 
 
         //Create the scroll pane and add the tree to it.
@@ -166,12 +163,7 @@ public class MatchingBasicGUI extends JPanel
         //add the legend
         add(createLegend(), constraintLegend);
 
-        mm = new MatchManager();
-
-        Properties config = new Properties();
-        config.load(MiscUtils.getInputStream(CLI.DEFAULT_CONFIG_FILE_NAME));
-        mm.setProperties(config);
-
+        mm = MatchManager.getInstanceFromResource(CLI.DEFAULT_CONFIG_FILE_NAME);
     }
 
 
@@ -352,7 +344,7 @@ public class MatchingBasicGUI extends JPanel
      */
     private static void createAndShowGUI() throws DISIException, IOException {
         //Create and set up the window.
-        JFrame frame = new JFrame("S-Match GUI");
+        JFrame frame = new JFrame("S-Match Basic GUI");
         frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 
         //try to set an icon
@@ -360,7 +352,7 @@ public class MatchingBasicGUI extends JPanel
             nl.ikarus.nxt.priv.imageio.icoreader.lib.ICOReaderSpi.registerIcoReader();
             System.setProperty("nl.ikarus.nxt.priv.imageio.icoreader.autoselect.icon", "true");
             ImageInputStream in = ImageIO.createImageInputStream(MatchingBasicGUI.class.getResourceAsStream(MAIN_ICON_FILE));
-            ArrayList<Image> icons = new ArrayList<Image>();
+            ArrayList<Image> icons = new ArrayList<>();
             Iterator<ImageReader> readers = ImageIO.getImageReaders(in);
             if (readers.hasNext()) {
                 ImageReader r = readers.next();
@@ -395,7 +387,6 @@ public class MatchingBasicGUI extends JPanel
      * @param jTree tree
      */
     protected void printNodesBounds(JTree jTree) {
-
         for (int i = 0; i < jTree.getRowCount(); i++) {
             System.out.println(jTree.getPathForRow(i));
             Rectangle bound = jTree.getRowBounds(i);
@@ -411,15 +402,15 @@ public class MatchingBasicGUI extends JPanel
      */
     private void printBound(Rectangle bound) {
         System.out.println("X:" + bound.getX() +
-                ",\tY:" + bound.getY() +
-                ",\theight:" + bound.height +
-                ",\twidth:" + bound.width +
-                ",\tlocation:" + bound.getLocation() +
-                ",\tgetMinX:" + bound.getMinX() +
-                ",\tgetMaxX:" + bound.getMaxX() +
-                ",\tgetMinY:" + bound.getMinY() +
-                ",\tgetMaxY:" + bound.getMaxY() +
-                ",\tgetCenterX:" + bound.getCenterX()
+                        ",\tY:" + bound.getY() +
+                        ",\theight:" + bound.height +
+                        ",\twidth:" + bound.width +
+                        ",\tlocation:" + bound.getLocation() +
+                        ",\tgetMinX:" + bound.getMinX() +
+                        ",\tgetMaxX:" + bound.getMaxX() +
+                        ",\tgetMinY:" + bound.getMinY() +
+                        ",\tgetMaxY:" + bound.getMaxY() +
+                        ",\tgetCenterX:" + bound.getCenterX()
         );
     }
 
@@ -449,9 +440,7 @@ public class MatchingBasicGUI extends JPanel
             public void run() {
                 try {
                     createAndShowGUI();
-                } catch (DISIException e) {
-                    log.error(e.getMessage(), e);
-                } catch (IOException e) {
+                } catch (DISIException | IOException e) {
                     log.error(e.getMessage(), e);
                 }
             }
@@ -611,7 +600,7 @@ public class MatchingBasicGUI extends JPanel
      * @return mapping file name
      * @throws SMatchException
      */
-    private String runMatcher() throws ConfigurableException {
+    private String runMatcher() throws SMatchException {
 
         String sourceFileName = sourceFileTxt.getText();
 
@@ -636,39 +625,47 @@ public class MatchingBasicGUI extends JPanel
     public void actionPerformed(ActionEvent e) {
         String command = e.getActionCommand();
         try {
-            if (OPEN_SOURCE_COMMAND.equals(command)) {
-                int returnVal = fc.showOpenDialog(MatchingBasicGUI.this);
+            switch (command) {
+                case OPEN_SOURCE_COMMAND: {
+                    int returnVal = fc.showOpenDialog(MatchingBasicGUI.this);
 
-                if (returnVal == JFileChooser.APPROVE_OPTION) {
-                    File file = fc.getSelectedFile();
-                    sourceFileTxt.setText(file.getAbsolutePath());
-                    System.out.println("Opening source: " + file.getAbsolutePath() + "");
+                    if (returnVal == JFileChooser.APPROVE_OPTION) {
+                        File file = fc.getSelectedFile();
+                        sourceFileTxt.setText(file.getAbsolutePath());
+                        System.out.println("Opening source: " + file.getAbsolutePath() + "");
 
-                    sourceContext = createTree(file.getAbsolutePath(), sourceTree, sourceRowForPath);
+                        sourceContext = createTree(file.getAbsolutePath(), sourceTree, sourceRowForPath);
+                    }
+                    break;
                 }
-            } else if (OPEN_TARGET_COMMAND.equals(command)) {
-                int returnVal = fc.showOpenDialog(MatchingBasicGUI.this);
+                case OPEN_TARGET_COMMAND: {
+                    int returnVal = fc.showOpenDialog(MatchingBasicGUI.this);
 
-                if (returnVal == JFileChooser.APPROVE_OPTION) {
-                    File file = fc.getSelectedFile();
-                    targetFileTxt.setText(file.getAbsolutePath());
-                    System.out.println("Opening target: " + file.getAbsolutePath() + "");
+                    if (returnVal == JFileChooser.APPROVE_OPTION) {
+                        File file = fc.getSelectedFile();
+                        targetFileTxt.setText(file.getAbsolutePath());
+                        System.out.println("Opening target: " + file.getAbsolutePath() + "");
 
-                    targetContext = createTree(file.getAbsolutePath(), targetTree, targetRowForPath);
+                        targetContext = createTree(file.getAbsolutePath(), targetTree, targetRowForPath);
+                    }
+                    break;
                 }
-            } else if (OPEN_MAPPING_COMMAND.equals(command)) {
-                int returnVal = fc.showOpenDialog(MatchingBasicGUI.this);
+                case OPEN_MAPPING_COMMAND: {
+                    int returnVal = fc.showOpenDialog(MatchingBasicGUI.this);
 
-                if (returnVal == JFileChooser.APPROVE_OPTION) {
-                    File file = fc.getSelectedFile();
-                    mappings = loadMappingsFromFile(sourceContext, targetContext, file.getAbsolutePath());
+                    if (returnVal == JFileChooser.APPROVE_OPTION) {
+                        File file = fc.getSelectedFile();
+                        mappings = loadMappingsFromFile(sourceContext, targetContext, file.getAbsolutePath());
+                    }
+
+                    break;
                 }
-
-            } else if (RUN_MATCHER_COMMAND.equals(command)) {
-                String mappingFile = runMatcher();
-                mappings = loadMappingsFromFile(sourceContext, targetContext, mappingFile);
+                case RUN_MATCHER_COMMAND:
+                    String mappingFile = runMatcher();
+                    mappings = loadMappingsFromFile(sourceContext, targetContext, mappingFile);
+                    break;
             }
-        } catch (ConfigurableException ex) {
+        } catch (SMatchException ex) {
             final String errMessage = ex.getClass().getSimpleName() + ": " + ex.getMessage();
             log.error(errMessage, ex);
         }

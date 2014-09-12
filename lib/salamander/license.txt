@@ -1,1 +1,1 @@
-SVG Salamander is avaible both under the LGPL and BSD licenses.
+SVG Salamander is available both under the LGPL and BSD licenses.

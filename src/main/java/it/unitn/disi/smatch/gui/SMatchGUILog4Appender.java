@@ -28,13 +28,20 @@ public class SMatchGUILog4Appender extends AppenderSkeleton {
     }
 
     @Override
-    protected void append(LoggingEvent loggingEvent) {
-        String logOutput = this.layout.format(loggingEvent);
-        if (null != taLog) {
-            taLog.append(logOutput);
-        } else {
-            cache.append(logOutput).append("\n");
-        }
+    protected void append(final LoggingEvent loggingEvent) {
+        SwingUtilities.invokeLater(
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        String logOutput = SMatchGUILog4Appender.this.layout.format(loggingEvent);
+                        if (null != taLog) {
+                            taLog.append(logOutput);
+                        } else {
+                            cache.append(logOutput).append("\n");
+                        }
+                    }
+                }
+        );
     }
 
     public void close() {

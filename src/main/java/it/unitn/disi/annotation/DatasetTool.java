@@ -1,8 +1,6 @@
 package it.unitn.disi.annotation;
 
 import it.unitn.disi.annotation.pipelines.IBaseContextPipeline;
-import it.unitn.disi.common.components.Configurable;
-import it.unitn.disi.common.components.ConfigurableException;
 import it.unitn.disi.nlptools.components.PipelineComponentException;
 import it.unitn.disi.smatch.SMatchException;
 import it.unitn.disi.smatch.data.trees.IBaseContext;
@@ -10,12 +8,13 @@ import it.unitn.disi.smatch.loaders.context.IBaseContextLoader;
 import it.unitn.disi.smatch.renderers.context.IBaseContextRenderer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.NoSuchBeanDefinitionException;
+import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.context.support.FileSystemXmlApplicationContext;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Properties;
 
 /**
  * Processes a dataset by applying to it a series of operations in a pipeline fashion.
@@ -24,56 +23,47 @@ import java.util.Properties;
  *
  * @author <a rel="author" href="http://autayeu.com/">Aliaksandr Autayeu</a>
  */
-public class DatasetTool extends Configurable {
+public class DatasetTool {
 
     private static final Logger log = LoggerFactory.getLogger(DatasetTool.class);
 
-    public static final String DEFAULT_CONFIG_FILE_NAME = ".." + File.separator + "conf" + File.separator + "d-tool.properties";
+    public static final String DEFAULT_CONFIG_FILE_NAME = ".." + File.separator + "conf" + File.separator + "d-tool.xml";
 
     // usage string
     private static final String USAGE = "Usage: DatasetTool <input> [output] [options]\n" +
             " Options: \n" +
-            " -config=file.properties                    read configuration from file.properties\n" +
-            " -property=key=value                        supply the configuration key=value (overriding those in the config file)";
+            " -config=file.xml                           read configuration from file.xml\n" +
+            "                                            use -Dkey=value to supply values to ${key} placeholders in the config file";
 
     // config file command line key
     public static final String configFileCmdLineKey = "-config=";
-    // property command line key
-    public static final String propCmdLineKey = "-property=";
 
     // component configuration keys and component instance variables
-    private static final String CONTEXT_LOADER_KEY = "ContextLoader";
-    private IBaseContextLoader contextLoader = null;
+    private static final String CONTEXT_LOADER_KEY = "contextLoader";
+    private final IBaseContextLoader contextLoader;
 
-    private static final String CONTEXT_RENDERER_KEY = "ContextRenderer";
-    private IBaseContextRenderer contextRenderer = null;
+    private static final String CONTEXT_RENDERER_KEY = "contextRenderer";
+    private final IBaseContextRenderer contextRenderer;
 
-    private static final String PIPELINE_KEY = "Pipeline";
+    private static final String PIPELINE_KEY = "pipeline";
     private IBaseContextPipeline pipeline;
 
-    @Override
-    public boolean setProperties(Properties newProperties) throws ConfigurableException {
-        if (log.isInfoEnabled()) {
-            log.info("Loading configuration...");
+    public DatasetTool(String configFileName) {
+        log.info("Loading configuration...");
+        ConfigurableApplicationContext applicationContext = new FileSystemXmlApplicationContext(configFileName);
+
+        contextLoader = applicationContext.getBean(CONTEXT_LOADER_KEY, IBaseContextLoader.class);
+        contextRenderer = applicationContext.getBean(CONTEXT_RENDERER_KEY, IBaseContextRenderer.class);
+        try {
+            pipeline = applicationContext.getBean(PIPELINE_KEY, IBaseContextPipeline.class);
+        } catch (NoSuchBeanDefinitionException e) {
+            pipeline = null;
         }
-        Properties oldProperties = new Properties();
-        oldProperties.putAll(properties);
-        boolean result = super.setProperties(newProperties);
-        if (result) {
-            contextLoader = (IBaseContextLoader) configureComponent(contextLoader, oldProperties, newProperties, "context loader", CONTEXT_LOADER_KEY, IBaseContextLoader.class);
-            contextRenderer = (IBaseContextRenderer) configureComponent(contextRenderer, oldProperties, newProperties, "context renderer", CONTEXT_RENDERER_KEY, IBaseContextRenderer.class);
-            if (newProperties.containsKey(PIPELINE_KEY)) {
-                pipeline = (IBaseContextPipeline) configureComponent(pipeline, oldProperties, newProperties, "pipeline", PIPELINE_KEY, IBaseContextPipeline.class);
-            } else {
-                pipeline = null;
-            }
-        }
-        return result;
     }
 
-    public IBaseContext loadContext(String fileName) throws ConfigurableException {
+    public IBaseContext loadContext(String fileName) throws SMatchException {
         if (null == contextLoader) {
-            throw new ConfigurableException("Context loader is not configured.");
+            throw new SMatchException("Context loader is not configured.");
         }
 
         log.info("Loading context from: " + fileName);
@@ -129,10 +119,10 @@ public class DatasetTool extends Configurable {
         }
     }
 
-    public static void main(String[] args) throws IOException, ConfigurableException {
+    public static void main(String[] args) throws IOException, SMatchException {
         // initialize property file
         String configFileName = DEFAULT_CONFIG_FILE_NAME;
-        ArrayList<String> cleanArgs = new ArrayList<String>();
+        ArrayList<String> cleanArgs = new ArrayList<>();
         for (String arg : args) {
             if (arg.startsWith(configFileCmdLineKey)) {
                 configFileName = arg.substring(configFileCmdLineKey.length());
@@ -144,75 +134,35 @@ public class DatasetTool extends Configurable {
         args = cleanArgs.toArray(new String[cleanArgs.size()]);
         cleanArgs.clear();
 
-        // collect properties specified on the command line
-        Properties commandProperties = new Properties();
-        for (String arg : args) {
-            if (arg.startsWith(propCmdLineKey)) {
-                String[] props = arg.substring(propCmdLineKey.length()).split("=");
-                if (0 < props.length) {
-                    String key = props[0];
-                    String value = "";
-                    if (1 < props.length) {
-                        value = props[1];
-                    }
-                    commandProperties.put(key, value);
-                }
-            } else {
-                cleanArgs.add(arg);
-            }
-        }
-
-        args = cleanArgs.toArray(new String[cleanArgs.size()]);
-
         // check input parameters
         if (args.length < 1) {
             System.out.println(USAGE);
         } else {
-            DatasetTool dt = new DatasetTool();
+            DatasetTool dt = new DatasetTool(configFileName);
 
-            Properties config = new Properties();
-            if (new File(configFileName).exists()) {
-                config.load(new FileInputStream(configFileName));
-            }
-
-            if (log.isDebugEnabled()) {
-                for (String k : commandProperties.stringPropertyNames()) {
-                    log.debug("property override: " + k + "=" + commandProperties.getProperty(k));
+            if (1 == args.length) {
+                String[] inputFiles = args[0].split(";");
+                dt.beforeProcessing();
+                for (String inputFile : inputFiles) {
+                    IBaseContext context = dt.loadContext(inputFile);
+                    dt.process(context);
                 }
-            }
+                dt.afterProcessing();
+            } else if (2 == args.length) {
+                String[] inputFiles = args[0].split(";");
+                String[] outputFiles = args[1].split(";");
 
-            // override from command line
-            config.putAll(commandProperties);
-
-            dt.setProperties(config);
-
-            if (!config.isEmpty()) {
-                if (1 == args.length) {
-                    String[] inputFiles = args[0].split(";");
+                if (inputFiles.length == outputFiles.length) {
                     dt.beforeProcessing();
-                    for (String inputFile : inputFiles) {
-                        IBaseContext context = dt.loadContext(inputFile);
+                    for (int i = 0; i < inputFiles.length; i++) {
+                        IBaseContext context = dt.loadContext(inputFiles[i]);
                         dt.process(context);
+                        dt.renderContext(context, outputFiles[i]);
                     }
                     dt.afterProcessing();
-                } else if (2 == args.length) {
-                    String[] inputFiles = args[0].split(";");
-                    String[] outputFiles = args[1].split(";");
-
-                    if (inputFiles.length == outputFiles.length) {
-                        dt.beforeProcessing();
-                        for (int i = 0; i < inputFiles.length; i++) {
-                            IBaseContext context = dt.loadContext(inputFiles[i]);
-                            dt.process(context);
-                            dt.renderContext(context, outputFiles[i]);
-                        }
-                        dt.afterProcessing();
-                    } else {
-                        System.out.println("Input and output arguments count mismatch.");
-                    }
+                } else {
+                    System.out.println("Input and output arguments count mismatch.");
                 }
-            } else {
-                System.out.println("Not enough arguments.");
             }
         }
     }

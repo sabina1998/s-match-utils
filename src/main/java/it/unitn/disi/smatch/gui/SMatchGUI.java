@@ -6,7 +6,6 @@ import com.ikayzo.swing.icon.LayeredIcon;
 import com.jgoodies.forms.builder.PanelBuilder;
 import com.jgoodies.forms.layout.CellConstraints;
 import com.jgoodies.forms.layout.FormLayout;
-import it.unitn.disi.common.components.ConfigurableException;
 import it.unitn.disi.smatch.CLI;
 import it.unitn.disi.smatch.IMatchManager;
 import it.unitn.disi.smatch.MatchManager;
@@ -20,6 +19,8 @@ import it.unitn.disi.smatch.data.trees.INode;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
+import org.springframework.core.NestedCheckedException;
+import org.springframework.core.NestedExceptionUtils;
 
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
@@ -46,7 +47,7 @@ import java.util.List;
  */
 public class SMatchGUI extends Observable implements Observer {
 
-    private static Logger log;
+    private static final Logger log;
 
     static {
         String log4jConf = System.getProperty("log4j.configuration");
@@ -78,15 +79,14 @@ public class SMatchGUI extends Observable implements Observer {
     private JTree lastFocusedTree;
 
     private String configFileName;
-    private Properties commandProperties;
 
     // GUI static elements
     private JFrame frame;
     private JPanel mainPanel;
     private JMenuBar mainMenu;
     private JTextArea taLog;
-    private DefaultComboBoxModel cmConfigs;
-    private JComboBox cbConfig;
+    private DefaultComboBoxModel<String> cmConfigs;
+    private JComboBox<String> cbConfig;
     private JFileChooser fc;
     private JTree tSource;
     private JTree tTarget;
@@ -162,34 +162,34 @@ public class SMatchGUI extends Observable implements Observer {
         return icon;
     }
 
-    private static Icon documentOpenSmall;
-    private static Icon documentOpenLarge;
-    private static Icon documentSaveSmall;
-    private static Icon documentSaveLarge;
-    private static Icon documentSaveAsSmall;
-    private static Icon documentSaveAsLarge;
-    private static Icon folderSmall;
-    private static Icon folderOpenSmall;
-    private static Icon iconDJ;
-    private static Icon iconEQ;
-    private static Icon iconMG;
-    private static Icon iconLG;
-    private static Icon smallIconDJ;
-    private static Icon smallIconEQ;
-    private static Icon smallIconMG;
-    private static Icon smallIconLG;
-    private static Icon iconAddNodeLarge;
+    private static final Icon documentOpenSmall;
+    private static final Icon documentOpenLarge;
+    private static final Icon documentSaveSmall;
+    private static final Icon documentSaveLarge;
+    private static final Icon documentSaveAsSmall;
+    private static final Icon documentSaveAsLarge;
+    private static final Icon folderSmall;
+    private static final Icon folderOpenSmall;
+    private static final Icon iconDJ;
+    private static final Icon iconEQ;
+    private static final Icon iconMG;
+    private static final Icon iconLG;
+    private static final Icon smallIconDJ;
+    private static final Icon smallIconEQ;
+    private static final Icon smallIconMG;
+    private static final Icon smallIconLG;
+    private static final Icon iconAddNodeLarge;
     private static Icon iconAddChildNodeLarge;
     private static Icon iconAddLinkLarge;
-    private static Icon iconDeleteLarge;
-    private static Icon iconAddNodeSmall;
+    private static final Icon iconDeleteLarge;
+    private static final Icon iconAddNodeSmall;
     private static Icon iconAddChildNodeSmall;
     private static Icon iconAddLinkSmall;
-    private static Icon iconDeleteSmall;
-    private static Icon iconContextCreateLarge;
-    private static Icon iconContextCreateSmall;
-    private static Icon iconUncoalesceSmall;
-    private static Icon iconUncoalesceLarge;
+    private static final Icon iconDeleteSmall;
+    private static final Icon iconContextCreateLarge;
+    private static final Icon iconContextCreateSmall;
+    private static final Icon iconUncoalesceSmall;
+    private static final Icon iconUncoalesceLarge;
 
     public static final int VERY_SMALL_ICON_SIZE = 12;
     public static final int SMALL_ICON_SIZE = 16;
@@ -204,11 +204,11 @@ public class SMatchGUI extends Observable implements Observer {
     private static final String NAME_MG = "more general";
     private static final String NAME_DJ = "disjoint";
 
-    private static String[] relStrings = {NAME_EQ, NAME_LG, NAME_MG, NAME_DJ};
+    private static final String[] relStrings = {NAME_EQ, NAME_LG, NAME_MG, NAME_DJ};
 
-    private static final HashMap<Character, String> relationToDescription = new HashMap<Character, String>(4);
-    private static final HashMap<String, Character> descriptionToRelation = new HashMap<String, Character>(4);
-    private static final HashMap<String, Icon> descriptionToIcon = new HashMap<String, Icon>(4);
+    private static final HashMap<Character, String> relationToDescription = new HashMap<>(4);
+    private static final HashMap<String, Character> descriptionToRelation = new HashMap<>(4);
+    private static final HashMap<String, Icon> descriptionToIcon = new HashMap<>(4);
 
     static {
         JIconFile icon = loadIconFile(TANGO_ICONS_PATH + "actions/document-open");
@@ -333,7 +333,7 @@ public class SMatchGUI extends Observable implements Observer {
         }
 
         // for each node keep an inclusive range of its coalesced children plus a substitute node with ellipsis
-        protected final HashMap<IBaseNode, Coalesce> coalesce = new HashMap<IBaseNode, Coalesce>();
+        protected final HashMap<IBaseNode, Coalesce> coalesce = new HashMap<>();
 
         public BaseCoalesceTreeModel(IBaseNode root) {
             super(root);
@@ -399,7 +399,7 @@ public class SMatchGUI extends Observable implements Observer {
          * Expands all coalesced nodes.
          */
         public void uncoalesceAll() {
-            List<IBaseNode> parents = new ArrayList<IBaseNode>(coalesce.keySet());
+            List<IBaseNode> parents = new ArrayList<>(coalesce.keySet());
             while (0 < parents.size()) {
                 uncoalesce(parents.get(0));
                 parents.remove(0);
@@ -612,7 +612,7 @@ public class SMatchGUI extends Observable implements Observer {
     private class MappingTreeModel extends BaseCoalesceTreeModel {
 
         //whether this tree is a source tree of a mapping
-        protected boolean isSource;
+        protected final boolean isSource;
 
         protected IContextMapping<INode> mapping;
 
@@ -688,7 +688,7 @@ public class SMatchGUI extends Observable implements Observer {
                 } else {
                     links = mapping.getTargets(node);
                 }
-                result = new ArrayList<DefaultMutableTreeNode>();
+                result = new ArrayList<>();
                 for (IMappingElement<INode> me : links) {
                     result.add(new DefaultMutableTreeNode(me));
                 }
@@ -907,7 +907,7 @@ public class SMatchGUI extends Observable implements Observer {
 
     private class MappingTableModel extends AbstractTableModel {
 
-        private IContextMapping<INode> mapping;
+        private final IContextMapping<INode> mapping;
         private HashMap<Integer, IMappingElement<INode>> order;
         private HashMap<IMappingElement<INode>, Integer> backOrder;
 
@@ -926,8 +926,8 @@ public class SMatchGUI extends Observable implements Observer {
         }
 
         private void imposeOrder(IContextMapping<INode> mapping) {
-            order = new HashMap<Integer, IMappingElement<INode>>(mapping.size());
-            backOrder = new HashMap<IMappingElement<INode>, Integer>(mapping.size());
+            order = new HashMap<>(mapping.size());
+            backOrder = new HashMap<>(mapping.size());
             int i = 0;
             for (INode source : mapping.getSourceContext().getNodesList()) {
                 for (IMappingElement<INode> e : mapping.getSources(source)) {
@@ -1032,28 +1032,25 @@ public class SMatchGUI extends Observable implements Observer {
         }
 
         public void actionPerformed(ActionEvent actionEvent) {
-            JOptionPane.showMessageDialog(frame, "Please edit the file " + configFileName + " using your preferred text editor.",
-                    "Edit configuration", JOptionPane.INFORMATION_MESSAGE);
-//            //.properties files are not associated with anything usually and sadly, just an error pops up.
-//            try {
-//                if (Desktop.isDesktopSupported()) {
-//                    Desktop desktop = Desktop.getDesktop();
-//                    final File fileToEdit = new File(configFileName);
-//                    desktop.edit(fileToEdit.getCanonicalFile());
-//                } else {
-//                    JOptionPane.showMessageDialog(frame, "This Desktop environment is not supported by the Java machine.", "Desktop not supported", JOptionPane.WARNING_MESSAGE);
-//                }
-//
-//                setChanged();
-//                notifyObservers();
-//            } catch (IOException e) {
-//                if (log.isEnabledFor(Level.ERROR)) {
-//                    log.error("Error launching editor for configuration file " + configFileName, e);
-//                }
-//                JOptionPane.showMessageDialog(frame, "Error launching editor for configuration file " + configFileName + ".\n\n" +
-//                        e.getMessage() + "\nPlease edit the file " + configFileName + " using your preferred text editor.",
-//                        "Configuration editing error", JOptionPane.ERROR_MESSAGE);
-//            }
+            try {
+                if (Desktop.isDesktopSupported()) {
+                    Desktop desktop = Desktop.getDesktop();
+                    final File fileToEdit = new File(configFileName);
+                    desktop.edit(fileToEdit.getCanonicalFile());
+                } else {
+                    JOptionPane.showMessageDialog(frame, "This Desktop environment is not supported by the Java machine.", "Desktop not supported", JOptionPane.WARNING_MESSAGE);
+                }
+
+                setChanged();
+                notifyObservers();
+            } catch (IOException e) {
+                if (log.isEnabledFor(Level.ERROR)) {
+                    log.error("Error launching editor for configuration file " + configFileName, e);
+                }
+                JOptionPane.showMessageDialog(frame, "Error launching editor for configuration file " + configFileName + ".\n\n" +
+                                e.getMessage() + "\nPlease edit the file " + configFileName + " using your preferred text editor.",
+                        "Configuration editing error", JOptionPane.ERROR_MESSAGE);
+            }
         }
 
         public void update(Observable o, Object arg) {
@@ -1063,7 +1060,7 @@ public class SMatchGUI extends Observable implements Observer {
 
     private class ActionBrowseURL extends AbstractAction {
 
-        private String url;
+        private final String url;
 
         private ActionBrowseURL(String url, String name) {
             super(name);
@@ -1078,19 +1075,12 @@ public class SMatchGUI extends Observable implements Observer {
                 } else {
                     JOptionPane.showMessageDialog(frame, "This Desktop environment is not supported by the Java machine.", "Desktop not supported", JOptionPane.WARNING_MESSAGE);
                 }
-            } catch (IOException e) {
+            } catch (IOException | URISyntaxException e) {
                 if (log.isEnabledFor(Level.ERROR)) {
                     log.error("Error while launching a browser at " + url, e);
                 }
                 JOptionPane.showMessageDialog(frame, "Error while launching a browser at " + url + ".\n\n" +
-                        e.getMessage() + "\nPlease open a browser at " + url,
-                        "Browser launch error", JOptionPane.ERROR_MESSAGE);
-            } catch (URISyntaxException e) {
-                if (log.isEnabledFor(Level.ERROR)) {
-                    log.error("Error while launching a browser at " + url, e);
-                }
-                JOptionPane.showMessageDialog(frame, "Error while launching a browser at " + url + ".\n\n" +
-                        e.getMessage() + "\nPlease open a browser at " + url,
+                                e.getMessage() + "\nPlease open a browser at " + url,
                         "Browser launch error", JOptionPane.ERROR_MESSAGE);
             }
         }
@@ -1673,7 +1663,7 @@ public class SMatchGUI extends Observable implements Observer {
         @Override
         public void setEnabled(JTree tree) {
             setEnabled(null != tree &&
-                    1 == tree.getSelectionCount() && (tree.getSelectionPath().getLastPathComponent() instanceof INode) && ((INode) tree.getSelectionPath().getLastPathComponent()).hasParent()
+                            1 == tree.getSelectionCount() && (tree.getSelectionPath().getLastPathComponent() instanceof INode) && ((INode) tree.getSelectionPath().getLastPathComponent()).hasParent()
             );
         }
     }
@@ -1705,7 +1695,7 @@ public class SMatchGUI extends Observable implements Observer {
         @Override
         public void setEnabled(JTree tree) {
             setEnabled(null != tree &&
-                    1 == tree.getSelectionCount() && (tree.getSelectionPath().getLastPathComponent() instanceof INode)
+                            1 == tree.getSelectionCount() && (tree.getSelectionPath().getLastPathComponent() instanceof INode)
             );
         }
     }
@@ -1755,17 +1745,17 @@ public class SMatchGUI extends Observable implements Observer {
                     if (IMappingElement.IDK == existingRel) {
                         // add the mapping
                         mapping.setRelation(sourceNode, targetNode, IMappingElement.EQUIVALENCE);
-                        IMappingElement<INode> me = new MappingElement<INode>(sourceNode, targetNode, IMappingElement.EQUIVALENCE);
+                        IMappingElement<INode> me = new MappingElement<>(sourceNode, targetNode, IMappingElement.EQUIVALENCE);
                         // add the link nodes
                         sourceLinkNode = new DefaultMutableTreeNode(me);
                         if (0 == sourceLinkNodes.size()) {
-                            sourceLinkNodes = new ArrayList<DefaultMutableTreeNode>();
+                            sourceLinkNodes = new ArrayList<>();
                             sourceNode.getNodeData().setUserObject(sourceLinkNodes);
                         }
                         sourceLinkNodes.add(sourceLinkNode);
                         targetLinkNode = new DefaultMutableTreeNode(me);
                         if (0 == targetLinkNodes.size()) {
-                            targetLinkNodes = new ArrayList<DefaultMutableTreeNode>();
+                            targetLinkNodes = new ArrayList<>();
                             targetNode.getNodeData().setUserObject(targetLinkNodes);
                         }
                         targetLinkNodes.add(targetLinkNode);
@@ -1835,9 +1825,9 @@ public class SMatchGUI extends Observable implements Observer {
 
         public void update(Observable o, Object arg) {
             setEnabled(null != mm &&
-                    null != source && 1 == tSource.getSelectionCount() && (tSource.getSelectionPath().getLastPathComponent() instanceof INode)
-                    &&
-                    null != target && 1 == tTarget.getSelectionCount() && (tTarget.getSelectionPath().getLastPathComponent() instanceof INode)
+                            null != source && 1 == tSource.getSelectionCount() && (tSource.getSelectionPath().getLastPathComponent() instanceof INode)
+                            &&
+                            null != target && 1 == tTarget.getSelectionCount() && (tTarget.getSelectionPath().getLastPathComponent() instanceof INode)
             );
         }
     }
@@ -2712,13 +2702,13 @@ public class SMatchGUI extends Observable implements Observer {
 
     private class NodeTreeCellEditor extends DefaultTreeCellEditor {
 
-        private TreeCellEditor oldRealEditor;
-        private TreeCellEditor comboEditor;
+        private final TreeCellEditor oldRealEditor;
+        private final TreeCellEditor comboEditor;
         private DefaultComboBox combo;
 
-        private class DefaultComboBox extends JComboBox implements FocusListener {//lifted from DefaultTreeCellEditor
+        private class DefaultComboBox extends JComboBox<String> implements FocusListener {//lifted from DefaultTreeCellEditor
 
-            class ComboBoxRenderer extends JLabel implements ListCellRenderer {
+            class ComboBoxRenderer extends JLabel implements ListCellRenderer<String> {
 
                 public ComboBoxRenderer() {
                     setOpaque(true);
@@ -2727,12 +2717,10 @@ public class SMatchGUI extends Observable implements Observer {
 
                 public Component getListCellRendererComponent(
                         JList list,
-                        Object value,
+                        String value,
                         int index,
                         boolean isSelected,
                         boolean cellHasFocus) {
-
-                    String relDesc = (String) value;
 
                     if (isSelected) {
                         setBackground(list.getSelectionBackground());
@@ -2742,8 +2730,8 @@ public class SMatchGUI extends Observable implements Observer {
                         setForeground(list.getForeground());
                     }
 
-                    setIcon(descriptionToIcon.get(relDesc));
-                    setText(relDesc);
+                    setIcon(descriptionToIcon.get(value));
+                    setText(value);
                     setFont(list.getFont());
 
                     return this;
@@ -2881,7 +2869,7 @@ public class SMatchGUI extends Observable implements Observer {
             Border aBorder = UIManager.getBorder("Tree.editorBorder");
             combo = new DefaultComboBox(aBorder);
 
-            ComboBoxModel cbm = new DefaultComboBoxModel(relStrings);
+            ComboBoxModel<String> cbm = new DefaultComboBoxModel<>(relStrings);
             combo.setModel(cbm);
             LinkCellEditor editor = new LinkCellEditor(combo) {
                 public boolean shouldSelectCell(EventObject event) {
@@ -3302,7 +3290,7 @@ public class SMatchGUI extends Observable implements Observer {
     }
 
     public static TreePath createPathToRoot(IBaseNode node) {
-        Deque<IBaseNode> pathToRoot = new ArrayDeque<IBaseNode>();
+        Deque<IBaseNode> pathToRoot = new ArrayDeque<>();
         IBaseNode curNode = node;
         while (null != curNode) {
             pathToRoot.push(curNode);
@@ -3488,14 +3476,14 @@ public class SMatchGUI extends Observable implements Observer {
         final JLabel lbConfig = new JLabel();
         lbConfig.setText("    Config:  ");
         tbMain.add(lbConfig);
-        cbConfig = new JComboBox();
-        cmConfigs = new DefaultComboBoxModel();
+        cbConfig = new JComboBox<>();
+        cmConfigs = new DefaultComboBoxModel<>();
         // read config files
         File f = new File(GUI_CONF_FILE);
         File configFolder = f.getParentFile();
         String[] configFiles = configFolder.list(new FilenameFilter() {
             public boolean accept(File dir, String name) {
-                return name.endsWith(".properties") && name.startsWith("s-match");
+                return name.endsWith(".xml") && name.startsWith("s-match");
             }
         });
         for (String config : configFiles) {
@@ -3771,52 +3759,34 @@ public class SMatchGUI extends Observable implements Observer {
     private void createMatchManager() {
         String configFile = new File(GUI_CONF_FILE).getParent() + File.separator + cmConfigs.getSelectedItem();
         log.info("Creating MatchManager with config: " + configFile);
-        try {
-            mm = new MatchManager();
-            updateMatchManagerConfig(configFile);
-        } catch (SMatchException e) {
-            log.error("Failed to create MatchManager: " + e);
-            JOptionPane.showMessageDialog(frame, "Error occurred while creating the MatchManager.\n\n" + e.getMessage() + "\n\nPlease, ensure the configuration is correct and try again.", "MatchManager creation error", JOptionPane.ERROR_MESSAGE);
-        }
+        updateMatchManagerConfig(configFile);
         setChanged();
         notifyObservers();
     }
 
     private void updateMatchManagerConfig(final String newConfig) {
         SwingWorker worker = new SwingWorker<String, Void>() {
-            private final IMatchManager copy = mm;
+            private IMatchManager copy;
 
             @Override
             public String doInBackground() {
                 String result = null;
                 try {
-                    Properties config = new Properties();
-                    config.load(new FileInputStream(newConfig));
-
-                    if (log.isEnabledFor(Level.DEBUG)) {
-                        for (String k : commandProperties.stringPropertyNames()) {
-                            log.debug("property override: " + k + "=" + commandProperties.getProperty(k));
-                        }
-                    }
-
-                    // override from command line
-                    config.putAll(commandProperties);
-                    copy.setProperties(config);
-                } catch (ConfigurableException exc) {
+                    copy = MatchManager.getInstanceFromConfigFile(newConfig);
+                } catch (Throwable e) {
                     if (log.isEnabledFor(Level.ERROR)) {
-                        log.error("Error loading configuration from " + configFileName, exc);
+                        log.error("Error loading configuration from " + configFileName, e);
                     }
-                    result = "Error occurred while loading the configuration from " + configFileName + ".\n\n" + exc.getMessage() + "\n\nPlease, ensure the configuration file is correct and try again.";
-                } catch (FileNotFoundException exc) {
-                    if (log.isEnabledFor(Level.ERROR)) {
-                        log.error("Error loading configuration from " + configFileName, exc);
+                    copy = null;
+                    Throwable rootCause = null;
+                    Throwable cause = e.getCause();
+                    while (cause != null && cause != rootCause) {
+                        rootCause = cause;
+                        cause = cause.getCause();
                     }
-                    result = "Error occurred while loading the configuration from " + configFileName + ".\n\n" + exc.getMessage() + "\n\nPlease, ensure the configuration file is correct and try again.";
-                } catch (IOException exc) {
-                    if (log.isEnabledFor(Level.ERROR)) {
-                        log.error("Error loading configuration from " + configFileName, exc);
-                    }
-                    result = "Error occurred while loading the configuration from " + configFileName + ".\n\n" + exc.getMessage() + "\n\nPlease, ensure the configuration file is correct and try again.";
+                    e = rootCause;
+                    result = "Error occurred while loading the configuration from " + configFileName + ".\n\n"
+                            + e.getClass().getSimpleName() + ": " + e.getMessage() + "\n\nPlease, ensure the configuration file is correct and try again.";
                 }
                 return result;
             }
@@ -3826,7 +3796,7 @@ public class SMatchGUI extends Observable implements Observer {
                 try {
                     String result = get();
                     if (null != result) {
-                        JOptionPane.showMessageDialog(frame, result, "Configuration loading error", JOptionPane.ERROR_MESSAGE);
+                        JOptionPane.showMessageDialog(frame, result, "Configuration load error", JOptionPane.ERROR_MESSAGE);
                     }
                 } catch (InterruptedException ignore) {
                 } catch (java.util.concurrent.ExecutionException e) {
@@ -3904,32 +3874,11 @@ public class SMatchGUI extends Observable implements Observer {
 
     public void startup(String[] args) throws IOException {
         // initialize property file
-        configFileName = ".." + File.separator + "conf" + File.separator + "s-match.properties";
-        ArrayList<String> cleanArgs = new ArrayList<String>();
+        configFileName = ".." + File.separator + "conf" + File.separator + "s-match.xml";
+        ArrayList<String> cleanArgs = new ArrayList<>();
         for (String arg : args) {
             if (arg.startsWith(CLI.CONFIG_FILE_CMD_LINE_KEY)) {
                 configFileName = arg.substring(CLI.CONFIG_FILE_CMD_LINE_KEY.length());
-            } else {
-                cleanArgs.add(arg);
-            }
-        }
-
-        args = cleanArgs.toArray(new String[cleanArgs.size()]);
-        cleanArgs.clear();
-
-        // collect properties specified on the command line
-        commandProperties = new Properties();
-        for (String arg : args) {
-            if (arg.startsWith(CLI.PROP_CMD_LINE_KEY)) {
-                String[] props = arg.substring(CLI.PROP_CMD_LINE_KEY.length()).split("=");
-                if (0 < props.length) {
-                    String key = props[0];
-                    String value = "";
-                    if (1 < props.length) {
-                        value = props[1];
-                    }
-                    commandProperties.put(key, value);
-                }
             } else {
                 cleanArgs.add(arg);
             }
@@ -3959,7 +3908,7 @@ public class SMatchGUI extends Observable implements Observer {
             nl.ikarus.nxt.priv.imageio.icoreader.lib.ICOReaderSpi.registerIcoReader();
             System.setProperty("nl.ikarus.nxt.priv.imageio.icoreader.autoselect.icon", "true");
             ImageInputStream in = ImageIO.createImageInputStream(SMatchGUI.class.getResourceAsStream(MAIN_ICON_FILE));
-            ArrayList<Image> icons = new ArrayList<Image>();
+            ArrayList<Image> icons = new ArrayList<>();
             Iterator<ImageReader> readers = ImageIO.getImageReaders(in);
             if (readers.hasNext()) {
                 ImageReader r = readers.next();

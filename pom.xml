@@ -26,6 +26,12 @@
     </issueManagement>
 
     <dependencies>
+        <!-- spring -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
+        </dependency>
+
         <!--legacy jars need to be installed first - see lib/install -->
         <dependency>
             <groupId>nl.ikarus.nxt.priv.imageio</groupId>
@@ -103,7 +109,7 @@
         <dependency>
             <groupId>net.sf.extjwnl</groupId>
             <artifactId>extjwnl-data-wn31</artifactId>
-            <version>1.1</version>
+            <version>1.2</version>
         </dependency>
 
         <dependency>
@@ -207,84 +213,69 @@
                 <targetPath>${project.build.directory}/dist/test-data</targetPath>
             </resource>
         </resources>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>appassembler-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>appassembler</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>assemble</goal>
+                        </goals>
+                        <configuration>
+                            <!-- set alternative assemble directory -->
+                            <assembleDirectory>${project.build.directory}/dist</assembleDirectory>
+                            <!-- Extra JVM arguments that will be included in the bin scripts -->
+                            <extraJvmArguments>-Xmx512M</extraJvmArguments>
+                            <includeConfigurationDirectoryInClasspath>true</includeConfigurationDirectoryInClasspath>
+                            <repositoryLayout>flat</repositoryLayout>
+                            <repositoryName>lib</repositoryName>
+                            <programs>
+                                <program>
+                                    <mainClass>it.unitn.disi.smatch.CLI</mainClass>
+                                    <id>match-manager</id>
+                                </program>
+                                <program>
+                                    <mainClass>it.unitn.disi.annotation.DatasetTool</mainClass>
+                                    <id>d-tool</id>
+                                </program>
+                                <program>
+                                    <mainClass>it.unitn.disi.smatch.gui.MatchingBasicGUI</mainClass>
+                                    <id>basic-gui</id>
+                                </program>
+                                <program>
+                                    <mainClass>it.unitn.disi.smatch.gui.SMatchGUI</mainClass>
+                                    <id>s-match-gui</id>
+                                </program>
+                            </programs>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>all</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+
+                        <configuration>
+                            <finalName>s-match-${project.version}</finalName>
+                            <appendAssemblyId>false</appendAssemblyId>
+                            <attach>false</attach>
+                            <descriptors>
+                                <descriptor>src/main/assembly/s-match.xml</descriptor>
+                            </descriptors>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
     </build>
-    <profiles>
-        <profile>
-            <id>sonatype-oss-release</id>
-
-            <activation>
-                <property>
-                    <name>performRelease</name>
-                    <value>true</value>
-                </property>
-            </activation>
-
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.codehaus.mojo</groupId>
-                        <artifactId>appassembler-maven-plugin</artifactId>
-                        <executions>
-                            <execution>
-                                <id>appassembler</id>
-                                <phase>package</phase>
-                                <goals>
-                                    <goal>assemble</goal>
-                                </goals>
-                                <configuration>
-                                    <!-- set alternative assemble directory -->
-                                    <assembleDirectory>${project.build.directory}/dist</assembleDirectory>
-                                    <!-- Extra JVM arguments that will be included in the bin scripts -->
-                                    <extraJvmArguments>-Xmx512M</extraJvmArguments>
-                                    <includeConfigurationDirectoryInClasspath>true</includeConfigurationDirectoryInClasspath>
-                                    <repositoryLayout>flat</repositoryLayout>
-                                    <repositoryName>lib</repositoryName>
-                                    <programs>
-                                        <program>
-                                            <mainClass>it.unitn.disi.smatch.CLI</mainClass>
-                                            <id>match-manager</id>
-                                        </program>
-                                        <program>
-                                            <mainClass>it.unitn.disi.annotation.DatasetTool</mainClass>
-                                            <id>d-tool</id>
-                                        </program>
-                                        <program>
-                                            <mainClass>it.unitn.disi.smatch.gui.MatchingBasicGUI</mainClass>
-                                            <id>basic-gui</id>
-                                        </program>
-                                        <program>
-                                            <mainClass>it.unitn.disi.smatch.gui.SMatchGUI</mainClass>
-                                            <id>s-match-gui</id>
-                                        </program>
-                                    </programs>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-assembly-plugin</artifactId>
-                        <executions>
-                            <execution>
-                                <id>all</id>
-                                <phase>package</phase>
-                                <goals>
-                                    <goal>single</goal>
-                                </goals>
-
-                                <configuration>
-                                    <finalName>s-match-${project.version}</finalName>
-                                    <appendAssemblyId>false</appendAssemblyId>
-                                    <attach>false</attach>
-                                    <descriptors>
-                                        <descriptor>src/main/assembly/s-match.xml</descriptor>
-                                    </descriptors>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-    </profiles>
 </project>

@@ -1,6 +1,5 @@
 package it.unitn.disi.smatch.classifiers;
 
-import it.unitn.disi.common.components.Configurable;
 import it.unitn.disi.smatch.data.trees.IContext;
 import it.unitn.disi.smatch.data.trees.INode;
 import it.unitn.disi.smatch.data.trees.INodeData;
@@ -16,7 +15,7 @@ import org.slf4j.LoggerFactory;
  *
  * @author <a rel="author" href="http://autayeu.com/">Aliaksandr Autayeu</a>
  */
-public class CNFContextClassifierOrbital extends Configurable implements IContextClassifier {
+public class CNFContextClassifierOrbital implements IContextClassifier {
 
     private static final Logger log = LoggerFactory.getLogger(CNFContextClassifierOrbital.class);
 
