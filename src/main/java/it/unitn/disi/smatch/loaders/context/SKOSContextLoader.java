@@ -31,7 +31,7 @@ import java.util.Set;
  *
  * @author <a rel="author" href="http://autayeu.com/">Aliaksandr Autayeu</a>
  */
-public class SKOSContextLoader extends BaseContextLoader<IContext> implements IContextLoader {
+public class SKOSContextLoader extends BaseContextLoader<IContext, INode> implements IContextLoader {
 
     private static final Logger log = LoggerFactory.getLogger(SKOSContextLoader.class);
 
@@ -53,7 +53,7 @@ public class SKOSContextLoader extends BaseContextLoader<IContext> implements IC
     public IContext loadContext(String fileName) throws ContextLoaderException {
         IContext result = new Context();
         try {
-            //check fileName whether it is URL or not
+            //check location whether it is URL or not
             if (!fileName.startsWith("http://") && !fileName.startsWith("file://")) {
                 File f = new File(fileName);
                 fileName = "file:///" + f.getAbsolutePath().replace('\\', '/');

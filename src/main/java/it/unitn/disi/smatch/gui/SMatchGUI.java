@@ -4,23 +4,24 @@ import com.ikayzo.swing.icon.IconUtils;
 import com.ikayzo.swing.icon.JIconFile;
 import com.ikayzo.swing.icon.LayeredIcon;
 import com.jgoodies.forms.builder.PanelBuilder;
+import com.jgoodies.forms.debug.FormDebugPanel;
 import com.jgoodies.forms.layout.CellConstraints;
 import com.jgoodies.forms.layout.FormLayout;
-import it.unitn.disi.smatch.CLI;
-import it.unitn.disi.smatch.IMatchManager;
-import it.unitn.disi.smatch.MatchManager;
-import it.unitn.disi.smatch.SMatchException;
+import it.unitn.disi.smatch.*;
+import it.unitn.disi.smatch.async.AsyncTask;
 import it.unitn.disi.smatch.data.mappings.IContextMapping;
 import it.unitn.disi.smatch.data.mappings.IMappingElement;
 import it.unitn.disi.smatch.data.mappings.MappingElement;
 import it.unitn.disi.smatch.data.trees.IBaseNode;
 import it.unitn.disi.smatch.data.trees.IContext;
 import it.unitn.disi.smatch.data.trees.INode;
+import it.unitn.disi.smatch.loaders.context.IAsyncContextLoader;
+import it.unitn.disi.smatch.loaders.mapping.IAsyncMappingLoader;
+import it.unitn.disi.smatch.renderers.context.IAsyncContextRenderer;
+import it.unitn.disi.smatch.renderers.mapping.IAsyncMappingRenderer;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
-import org.springframework.core.NestedCheckedException;
-import org.springframework.core.NestedExceptionUtils;
 
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
@@ -31,21 +32,27 @@ import javax.swing.event.*;
 import javax.swing.plaf.FontUIResource;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.DefaultTableModel;
 import javax.swing.tree.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 import java.io.*;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.*;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Semaphore;
 
 /**
  * GUI for S-Match.
  *
  * @author <a rel="author" href="http://autayeu.com/">Aliaksandr Autayeu</a>
  */
-public class SMatchGUI extends Observable implements Observer {
+public class SMatchGUI extends Observable implements Observer, Executor {
 
     private static final Logger log;
 
@@ -66,7 +73,7 @@ public class SMatchGUI extends Observable implements Observer {
 
     private String lookAndFeel = null;
 
-    private IMatchManager mm = null;
+    private volatile IMatchManager mm = null;
     private IContext source = null;
     private boolean sourceModified = false;
     private String sourceLocation = null;
@@ -77,6 +84,13 @@ public class SMatchGUI extends Observable implements Observer {
     private boolean mappingModified = false;
     private String mappingLocation = null;
     private JTree lastFocusedTree;
+    private int cbConfigPrevIndex;
+
+    private final int PERMITS = Integer.MAX_VALUE;
+    private final Semaphore semMapping = new Semaphore(PERMITS);
+    private final Semaphore semSource = new Semaphore(PERMITS);
+    private final Semaphore semTarget = new Semaphore(PERMITS);
+    private final Semaphore semManager = new Semaphore(PERMITS);
 
     private String configFileName;
 
@@ -97,7 +111,6 @@ public class SMatchGUI extends Observable implements Observer {
     private JPanel pnContextsMapping;
     private JScrollPane spSource;
     private JScrollPane spTarget;
-    private JScrollPane spMappingTable;
     private JSplitPane spnContextsLog;
     private JScrollPane spLog;
     private JPopupMenu popSource;
@@ -105,6 +118,9 @@ public class SMatchGUI extends Observable implements Observer {
     private JTextField teMappingLocation;
     private JTextField teSourceContextLocation;
     private JTextField teTargetContextLocation;
+    private JProgressBar pbProgress;
+    private JProgressBar pbSourceProgress;
+    private JProgressBar pbTargetProgress;
 
     // actions
     private Action acSourceCreate;
@@ -196,6 +212,7 @@ public class SMatchGUI extends Observable implements Observer {
     public static final int LARGE_ICON_SIZE = 32;
 
     private static final String EMPTY_ROOT_NODE_LABEL = "Create or open context";
+    private static final String LOADING_LABEL = "Loading...";
     public static final String ELLIPSIS = "...";
 
 
@@ -681,7 +698,7 @@ public class SMatchGUI extends Observable implements Observer {
         public List<DefaultMutableTreeNode> updateUserObject(final IBaseNode bNode) {
             INode node = (INode) bNode;
             List<DefaultMutableTreeNode> result = Collections.emptyList();
-            List<IMappingElement<INode>> links;
+            Set<IMappingElement<INode>> links;
             if (null != mapping) {
                 if (isSource) {
                     links = mapping.getSources(node);
@@ -803,9 +820,9 @@ public class SMatchGUI extends Observable implements Observer {
                             targetModified = true;
                         }
                         //notify mapping table
-                        if (tblMapping.getModel() instanceof MappingTableModel) {
+                        if (null != mapping && tblMapping.getModel() instanceof MappingTableModel) {
                             MappingTableModel mtm = (MappingTableModel) tblMapping.getModel();
-                            List<IMappingElement<INode>> links;
+                            Set<IMappingElement<INode>> links;
                             if (isSource) {
                                 links = mapping.getSources(node);
                             } else {
@@ -1104,10 +1121,10 @@ public class SMatchGUI extends Observable implements Observer {
                     acSourceClose.actionPerformed(actionEvent);
                 }
                 if (!acSourceClose.isEnabled()) {
-                    source = mm.createContext();
+                    source = getMatchManager().createContext();
                     source.createRoot("Top");
                     if (null != target) {
-                        mapping = mm.getMappingFactory().getContextMappingInstance(source, target);
+                        mapping = getMatchManager().getMappingFactory().getContextMappingInstance(source, target);
                         resetMappingInModel(tTarget);
                         resetMappingInTable();
                     }
@@ -1121,7 +1138,7 @@ public class SMatchGUI extends Observable implements Observer {
         }
 
         public void update(Observable o, Object arg) {
-            setEnabled(null != mm);
+            setEnabled(null != getMatchManager() && PERMITS == semSource.availablePermits());
         }
     }
 
@@ -1136,14 +1153,13 @@ public class SMatchGUI extends Observable implements Observer {
                 acMappingClose.actionPerformed(actionEvent);
             }
             if (!acMappingClose.isEnabled()) {
-                ff.setDescription(mm.getContextLoader().getDescription());
-                fc.addChoosableFileFilter(ff);
-                final int returnVal = fc.showOpenDialog(mainPanel);
-                fc.removeChoosableFileFilter(ff);
+                ff.setDescription(getMatchManager().getContextLoader().getDescription());
+                getFileChooser().addChoosableFileFilter(ff);
+                final int returnVal = getFileChooser().showOpenDialog(mainPanel);
+                getFileChooser().removeChoosableFileFilter(ff);
 
                 if (returnVal == JFileChooser.APPROVE_OPTION) {
-                    File file = fc.getSelectedFile();
-                    open(file);
+                    open(getFileChooser().getSelectedFile());
                 }
             }
         }
@@ -1151,30 +1167,9 @@ public class SMatchGUI extends Observable implements Observer {
         protected abstract void open(File file);
 
         public void update(Observable o, Object arg) {
-            setEnabled(null != mm && null != mm.getContextLoader());
+            setEnabled(null != getMatchManager() && null != getMatchManager().getContextLoader());
         }
     }
-
-    private abstract class ActionTreePreprocess extends AbstractAction implements Observer {
-
-        protected ActionTreePreprocess(String name) {
-            super(name);
-        }
-
-        protected void preprocess(IContext context) {
-            try {
-                mm.offline(context);
-                setChanged();
-                notifyObservers();
-            } catch (SMatchException e) {
-                if (log.isEnabledFor(Level.ERROR)) {
-                    log.error("Error while preprocessing context", e);
-                }
-                JOptionPane.showMessageDialog(frame, "Error occurred while preprocessing the context.\n\n" + e.getMessage() + "\n\nPlease, ensure S-Match is intact and configured properly.", "Context preprocessing error", JOptionPane.ERROR_MESSAGE);
-            }
-        }
-    }
-
 
     private class ActionSourceOpen extends ActionTreeOpen implements Observer {
         public ActionSourceOpen() {
@@ -1194,10 +1189,16 @@ public class SMatchGUI extends Observable implements Observer {
             }
             if (!acSourceClose.isEnabled()) {
                 super.actionPerformed(actionEvent);
+                sourceModified = false;
             }
-            sourceModified = false;
             setChanged();
             notifyObservers();
+        }
+
+        @Override
+        public void update(Observable o, Object arg) {
+            super.update(o, arg);
+            setEnabled(isEnabled() && PERMITS == semSource.availablePermits());
         }
 
         @Override
@@ -1206,7 +1207,7 @@ public class SMatchGUI extends Observable implements Observer {
         }
     }
 
-    private class ActionSourcePreprocess extends ActionTreePreprocess implements Observer {
+    private class ActionSourcePreprocess extends AbstractAction implements Observer {
         public ActionSourcePreprocess() {
             super("Preprocess");
             putValue(Action.MNEMONIC_KEY, new Integer(KeyEvent.VK_P));
@@ -1216,14 +1217,13 @@ public class SMatchGUI extends Observable implements Observer {
         }
 
         public void actionPerformed(ActionEvent actionEvent) {
-            preprocess(source);
-            sourceModified = true;
-            setChanged();
-            notifyObservers();
+            SwingWorker<Void, Void> offlineTask = createContextOfflineTask(source, semSource, pbSourceProgress, true);
+            offlineTask.execute();
         }
 
         public void update(Observable o, Object arg) {
-            setEnabled(null != mm && null != source && null != mm.getContextPreprocessor());
+            setEnabled(null != getMatchManager() && null != source && null != getMatchManager().getContextPreprocessor()
+                    && PERMITS == semSource.availablePermits());
         }
     }
 
@@ -1274,7 +1274,7 @@ public class SMatchGUI extends Observable implements Observer {
         }
 
         public void update(Observable o, Object arg) {
-            setEnabled(null != mm && null != source);
+            setEnabled(null != getMatchManager() && null != source && PERMITS == semSource.availablePermits());
         }
     }
 
@@ -1291,28 +1291,18 @@ public class SMatchGUI extends Observable implements Observer {
 
         public void actionPerformed(ActionEvent actionEvent) {
             if (null == sourceLocation) {
-                ff.setDescription(mm.getContextRenderer().getDescription());
-                fc.addChoosableFileFilter(ff);
-                final int returnVal = fc.showSaveDialog(mainPanel);
-                fc.removeChoosableFileFilter(ff);
+                ff.setDescription(getMatchManager().getContextRenderer().getDescription());
+                getFileChooser().addChoosableFileFilter(ff);
+                final int returnVal = getFileChooser().showSaveDialog(mainPanel);
+                getFileChooser().removeChoosableFileFilter(ff);
 
                 if (returnVal == JFileChooser.APPROVE_OPTION) {
-                    File file = fc.getSelectedFile();
-                    sourceLocation = file.getAbsolutePath();
+                    sourceLocation = getFileChooser().getSelectedFile().getAbsolutePath();
                 }
             }
 
             if (null != sourceLocation) {
-                log.info("Saving source: " + sourceLocation);
-                try {
-                    mm.renderContext(source, sourceLocation);
-                    sourceModified = false;
-                } catch (SMatchException e) {
-                    if (log.isEnabledFor(Level.ERROR)) {
-                        log.error("Error while saving source context", e);
-                    }
-                    JOptionPane.showMessageDialog(frame, "Error occurred while saving the context.\n\n" + e.getMessage() + "\n\nPlease, ensure the S-Match is intact, configured properly and try again.", "Context save error", JOptionPane.ERROR_MESSAGE);
-                }
+                saveSource(sourceLocation);
             }
 
             setChanged();
@@ -1320,7 +1310,10 @@ public class SMatchGUI extends Observable implements Observer {
         }
 
         public void update(Observable o, Object arg) {
-            setEnabled(null != mm && null != source && null != mm.getContextRenderer() && sourceModified);
+            setEnabled(null != getMatchManager() && null != source && null != getMatchManager().getContextRenderer()
+                    && sourceModified
+                    // exclusivity because uses the same progress bar
+                    && PERMITS == semSource.availablePermits());
         }
     }
 
@@ -1335,27 +1328,17 @@ public class SMatchGUI extends Observable implements Observer {
         }
 
         public void actionPerformed(ActionEvent actionEvent) {
-            ff.setDescription(mm.getContextRenderer().getDescription());
-            fc.addChoosableFileFilter(ff);
-            final int returnVal = fc.showSaveDialog(mainPanel);
-            fc.removeChoosableFileFilter(ff);
+            ff.setDescription(getMatchManager().getContextRenderer().getDescription());
+            getFileChooser().addChoosableFileFilter(ff);
+            final int returnVal = getFileChooser().showSaveDialog(mainPanel);
+            getFileChooser().removeChoosableFileFilter(ff);
 
             if (returnVal == JFileChooser.APPROVE_OPTION) {
-                File file = fc.getSelectedFile();
-                sourceLocation = file.getAbsolutePath();
+                sourceLocation = getFileChooser().getSelectedFile().getAbsolutePath();
             }
 
             if (null != sourceLocation) {
-                log.info("Saving source: " + sourceLocation);
-                try {
-                    mm.renderContext(source, sourceLocation);
-                    sourceModified = false;
-                } catch (SMatchException e) {
-                    if (log.isEnabledFor(Level.ERROR)) {
-                        log.error("Error while saving source context", e);
-                    }
-                    JOptionPane.showMessageDialog(frame, "Error occurred while saving the context.\n\n" + e.getMessage() + "\n\nPlease, ensure the S-Match is intact, configured properly and try again.", "Context save error", JOptionPane.ERROR_MESSAGE);
-                }
+                saveSource(sourceLocation);
             }
 
             setChanged();
@@ -1363,7 +1346,9 @@ public class SMatchGUI extends Observable implements Observer {
         }
 
         public void update(Observable o, Object arg) {
-            setEnabled(null != mm && null != source && null != mm.getContextRenderer());
+            setEnabled(null != getMatchManager() && null != source && null != getMatchManager().getContextRenderer()
+                    // exclusivity because uses the same progress bar
+                    && PERMITS == semSource.availablePermits());
         }
     }
 
@@ -1385,10 +1370,10 @@ public class SMatchGUI extends Observable implements Observer {
                     acTargetClose.actionPerformed(actionEvent);
                 }
                 if (!acTargetClose.isEnabled()) {
-                    target = mm.createContext();
+                    target = getMatchManager().createContext();
                     target.createRoot("Top");
                     if (null != source) {
-                        mapping = mm.getMappingFactory().getContextMappingInstance(source, target);
+                        mapping = getMatchManager().getMappingFactory().getContextMappingInstance(source, target);
                         resetMappingInTable();
                         resetMappingInModel(tSource);
                     }
@@ -1403,7 +1388,7 @@ public class SMatchGUI extends Observable implements Observer {
         }
 
         public void update(Observable o, Object arg) {
-            setEnabled(null != mm);
+            setEnabled(null != getMatchManager() && PERMITS == semTarget.availablePermits());
         }
     }
 
@@ -1425,10 +1410,16 @@ public class SMatchGUI extends Observable implements Observer {
             }
             if (!acTargetClose.isEnabled()) {
                 super.actionPerformed(actionEvent);
+                targetModified = false;
             }
-            targetModified = false;
             setChanged();
             notifyObservers();
+        }
+
+        @Override
+        public void update(Observable o, Object arg) {
+            super.update(o, arg);
+            setEnabled(isEnabled() && PERMITS == semTarget.availablePermits());
         }
 
         @Override
@@ -1437,7 +1428,7 @@ public class SMatchGUI extends Observable implements Observer {
         }
     }
 
-    private class ActionTargetPreprocess extends ActionTreePreprocess implements Observer {
+    private class ActionTargetPreprocess extends AbstractAction implements Observer {
         public ActionTargetPreprocess() {
             super("Preprocess");
             putValue(Action.MNEMONIC_KEY, new Integer(KeyEvent.VK_P));
@@ -1447,14 +1438,13 @@ public class SMatchGUI extends Observable implements Observer {
         }
 
         public void actionPerformed(ActionEvent actionEvent) {
-            preprocess(target);
-            targetModified = true;
-            setChanged();
-            notifyObservers();
+            SwingWorker<Void, Void> offlineTask = createContextOfflineTask(target, semTarget, pbTargetProgress, false);
+            offlineTask.execute();
         }
 
         public void update(Observable o, Object arg) {
-            setEnabled(null != mm && null != target && null != mm.getContextPreprocessor());
+            setEnabled(null != getMatchManager() && null != target && null != getMatchManager().getContextPreprocessor()
+                    && PERMITS == semTarget.availablePermits());
         }
     }
 
@@ -1505,7 +1495,7 @@ public class SMatchGUI extends Observable implements Observer {
         }
 
         public void update(Observable o, Object arg) {
-            setEnabled(null != mm && null != target);
+            setEnabled(null != getMatchManager() && null != target && PERMITS == semTarget.availablePermits());
         }
     }
 
@@ -1522,28 +1512,18 @@ public class SMatchGUI extends Observable implements Observer {
 
         public void actionPerformed(ActionEvent actionEvent) {
             if (null == targetLocation) {
-                ff.setDescription(mm.getContextRenderer().getDescription());
-                fc.addChoosableFileFilter(ff);
-                final int returnVal = fc.showSaveDialog(mainPanel);
-                fc.removeChoosableFileFilter(ff);
+                ff.setDescription(getMatchManager().getContextRenderer().getDescription());
+                getFileChooser().addChoosableFileFilter(ff);
+                final int returnVal = getFileChooser().showSaveDialog(mainPanel);
+                getFileChooser().removeChoosableFileFilter(ff);
 
                 if (returnVal == JFileChooser.APPROVE_OPTION) {
-                    File file = fc.getSelectedFile();
-                    targetLocation = file.getAbsolutePath();
+                    targetLocation = getFileChooser().getSelectedFile().getAbsolutePath();
                 }
             }
 
             if (null != targetLocation) {
-                log.info("Saving target: " + targetLocation);
-                try {
-                    mm.renderContext(target, targetLocation);
-                    targetModified = false;
-                } catch (SMatchException e) {
-                    if (log.isEnabledFor(Level.ERROR)) {
-                        log.error("Error while saving target context", e);
-                    }
-                    JOptionPane.showMessageDialog(frame, "Error occurred while saving the context.\n\n" + e.getMessage() + "\n\nPlease, ensure the S-Match is intact, configured properly and try again.", "Context save error", JOptionPane.ERROR_MESSAGE);
-                }
+                saveTarget(targetLocation);
             }
 
             setChanged();
@@ -1551,7 +1531,10 @@ public class SMatchGUI extends Observable implements Observer {
         }
 
         public void update(Observable o, Object arg) {
-            setEnabled(null != mm && null != target && null != mm.getContextRenderer() && targetModified);
+            setEnabled(null != getMatchManager() && null != target && null != getMatchManager().getContextRenderer()
+                    && targetModified
+                    // exclusivity because uses the same progress bar
+                    && PERMITS == semTarget.availablePermits());
         }
     }
 
@@ -1566,27 +1549,17 @@ public class SMatchGUI extends Observable implements Observer {
         }
 
         public void actionPerformed(ActionEvent actionEvent) {
-            ff.setDescription(mm.getContextRenderer().getDescription());
-            fc.addChoosableFileFilter(ff);
-            final int returnVal = fc.showSaveDialog(mainPanel);
-            fc.removeChoosableFileFilter(ff);
+            ff.setDescription(getMatchManager().getContextRenderer().getDescription());
+            getFileChooser().addChoosableFileFilter(ff);
+            final int returnVal = getFileChooser().showSaveDialog(mainPanel);
+            getFileChooser().removeChoosableFileFilter(ff);
 
             if (returnVal == JFileChooser.APPROVE_OPTION) {
-                File file = fc.getSelectedFile();
-                targetLocation = file.getAbsolutePath();
+                targetLocation = getFileChooser().getSelectedFile().getAbsolutePath();
             }
 
             if (null != targetLocation) {
-                log.info("Saving target: " + targetLocation);
-                try {
-                    mm.renderContext(target, targetLocation);
-                    targetModified = false;
-                } catch (SMatchException e) {
-                    if (log.isEnabledFor(Level.ERROR)) {
-                        log.error("Error while saving target context", e);
-                    }
-                    JOptionPane.showMessageDialog(frame, "Error occurred while saving the context.\n\n" + e.getMessage() + "\n\nPlease, ensure the S-Match is intact, configured properly and try again.", "Context save error", JOptionPane.ERROR_MESSAGE);
-                }
+                saveTarget(targetLocation);
             }
 
             setChanged();
@@ -1594,7 +1567,9 @@ public class SMatchGUI extends Observable implements Observer {
         }
 
         public void update(Observable o, Object arg) {
-            setEnabled(null != mm && null != target && null != mm.getContextRenderer());
+            setEnabled(null != getMatchManager() && null != target && null != getMatchManager().getContextRenderer()
+                    // exclusivity because uses the same progress bar
+                    && PERMITS == semTarget.availablePermits());
         }
     }
 
@@ -1662,8 +1637,10 @@ public class SMatchGUI extends Observable implements Observer {
 
         @Override
         public void setEnabled(JTree tree) {
-            setEnabled(null != tree &&
-                            1 == tree.getSelectionCount() && (tree.getSelectionPath().getLastPathComponent() instanceof INode) && ((INode) tree.getSelectionPath().getLastPathComponent()).hasParent()
+            setEnabled(null != tree && 1 == tree.getSelectionCount()
+                            && (tree.getSelectionPath().getLastPathComponent() instanceof INode)
+                            && ((INode) tree.getSelectionPath().getLastPathComponent()).hasParent()
+                            && (tree == tSource ? PERMITS == semSource.availablePermits() : PERMITS == semTarget.availablePermits())
             );
         }
     }
@@ -1694,8 +1671,10 @@ public class SMatchGUI extends Observable implements Observer {
 
         @Override
         public void setEnabled(JTree tree) {
-            setEnabled(null != tree &&
-                            1 == tree.getSelectionCount() && (tree.getSelectionPath().getLastPathComponent() instanceof INode)
+            setEnabled(null != tree && 1 == tree.getSelectionCount()
+                            && (tree.getSelectionPath().getLastPathComponent() instanceof INode
+                            && (tree == tSource ? PERMITS == semSource.availablePermits() : PERMITS == semTarget.availablePermits())
+                    )
             );
         }
     }
@@ -1719,7 +1698,7 @@ public class SMatchGUI extends Observable implements Observer {
 
                 if (null == mapping) {
                     JTree oldLastFocusedTree = lastFocusedTree;
-                    mapping = mm.getMappingFactory().getContextMappingInstance(source, target);
+                    mapping = getMatchManager().getMappingFactory().getContextMappingInstance(source, target);
                     resetMappingInModel(tSource);
                     resetMappingInModel(tTarget);
                     resetMappingInTable();
@@ -1824,10 +1803,11 @@ public class SMatchGUI extends Observable implements Observer {
         }
 
         public void update(Observable o, Object arg) {
-            setEnabled(null != mm &&
+            setEnabled(null != getMatchManager() &&
                             null != source && 1 == tSource.getSelectionCount() && (tSource.getSelectionPath().getLastPathComponent() instanceof INode)
                             &&
                             null != target && 1 == tTarget.getSelectionCount() && (tTarget.getSelectionPath().getLastPathComponent() instanceof INode)
+                            && PERMITS == semMapping.availablePermits()
             );
         }
     }
@@ -1859,12 +1839,15 @@ public class SMatchGUI extends Observable implements Observer {
         public void setEnabled(JTree tree) {
             boolean result = null != tree
                     && 1 == tree.getSelectionCount()
+                    && null != tree.getSelectionPath()
                     && null != tree.getSelectionPath().getParentPath()
-                    && null != tree.getSelectionPath().getParentPath().getLastPathComponent();
+                    && null != tree.getSelectionPath().getParentPath().getLastPathComponent()
+                    && (tree == tSource ? PERMITS == semSource.availablePermits() : PERMITS == semTarget.availablePermits());
 
             // disable deletion for subs (...) nodes
             if (result) {
-                if (tree.getSelectionPath().getLastPathComponent() instanceof DefaultMutableTreeNode) {
+                if (null != tree.getSelectionPath() &&
+                        tree.getSelectionPath().getLastPathComponent() instanceof DefaultMutableTreeNode) {
                     DefaultMutableTreeNode dmtn = (DefaultMutableTreeNode) tree.getSelectionPath().getLastPathComponent();
                     result = dmtn.getUserObject() instanceof IMappingElement;
                 }
@@ -1963,76 +1946,14 @@ public class SMatchGUI extends Observable implements Observer {
                 acMappingClose.actionPerformed(actionEvent);
             }
             if (!acMappingClose.isEnabled()) {
-                SwingWorker worker = new SwingWorker<String, Void>() {
-                    private final IMatchManager copy = mm;
-
-                    @Override
-                    public String doInBackground() {
-                        String result = null;
-                        try {
-                            if (!source.getRoot().getNodeData().isSubtreePreprocessed()) {
-                                log.info("Source is not preprocessed.");
-                                log.info("Preprocessing source.");
-                                copy.offline(source);
-                            }
-                            if (!target.getRoot().getNodeData().isSubtreePreprocessed()) {
-                                log.info("Target is not preprocessed.");
-                                log.info("Preprocessing target.");
-                                copy.offline(target);
-                            }
-                            mapping = copy.online(source, target);
-                        } catch (SMatchException e) {
-                            if (log.isEnabledFor(Level.ERROR)) {
-                                log.error("Error while creating a mapping between source and target contexts", e);
-                                log.debug(e);
-                            }
-                            result = "Error occurred while creating the mapping.\n\n" + e.getMessage() + "\n\nPlease, ensure the S-Match is intact, configured properly and try again.";
-                        }
-                        return result;
-                    }
-
-                    @Override
-                    public void done() {
-                        try {
-                            String result = get();
-                            if (null != result) {
-                                JOptionPane.showMessageDialog(frame, result, "Mapping creation error", JOptionPane.ERROR_MESSAGE);
-                            }
-                        } catch (InterruptedException ignore) {
-                        } catch (java.util.concurrent.ExecutionException e) {
-                            String why;
-                            Throwable cause = e.getCause();
-                            while (null != cause && null != cause.getCause()) {
-                                cause = e.getCause();
-                            }
-                            if (cause != null) {
-                                why = cause.getMessage();
-                            } else {
-                                why = e.getMessage();
-                            }
-                            log.error("Error creating mapping: " + why);
-                        } finally {
-                            mm = copy;
-                            resetMappingInTable();
-                            createTree(source, tSource, mapping);
-                            createTree(target, tTarget, mapping);
-                            mappingLocation = null;
-                            mappingModified = true;
-                            setChanged();
-                            notifyObservers();
-                        }
-                    }
-                };
-                // switches off all mm dependent methods
-                mm = null;
-                setChanged();
-                notifyObservers();
-                worker.execute();
+                SwingWorker<IContextMapping<INode>, IMappingElement<INode>> task = createMatchTask();
+                task.execute();
             }
         }
 
         public void update(Observable o, Object arg) {
-            setEnabled(null != mm && null != source && null != target);
+            setEnabled(null != getMatchManager() && null != source && null != target
+                    && PERMITS == semMapping.availablePermits());
         }
     }
 
@@ -2052,14 +1973,13 @@ public class SMatchGUI extends Observable implements Observer {
                 acMappingClose.actionPerformed(actionEvent);
             }
             if (!acMappingClose.isEnabled()) {
-                ff.setDescription(mm.getMappingLoader().getDescription());
-                fc.addChoosableFileFilter(ff);
-                final int returnVal = fc.showOpenDialog(mainPanel);
-                fc.removeChoosableFileFilter(ff);
+                ff.setDescription(getMatchManager().getMappingLoader().getDescription());
+                getFileChooser().addChoosableFileFilter(ff);
+                final int returnVal = getFileChooser().showOpenDialog(mainPanel);
+                getFileChooser().removeChoosableFileFilter(ff);
 
                 if (returnVal == JFileChooser.APPROVE_OPTION) {
-                    File file = fc.getSelectedFile();
-                    openMapping(file);
+                    openMapping(getFileChooser().getSelectedFile());
                     mappingModified = false;
                 }
             }
@@ -2068,7 +1988,8 @@ public class SMatchGUI extends Observable implements Observer {
         }
 
         public void update(Observable o, Object arg) {
-            setEnabled(null != mm && null != source && null != target && null != mm.getMappingLoader());
+            setEnabled(null != getMatchManager() && null != source && null != target && null != getMatchManager().getMappingLoader()
+                    && PERMITS == semMapping.availablePermits());
         }
     }
 
@@ -2114,7 +2035,7 @@ public class SMatchGUI extends Observable implements Observer {
         }
 
         public void update(Observable o, Object arg) {
-            setEnabled(null != mm && null != mapping);
+            setEnabled(null != getMatchManager() && null != mapping && PERMITS == semMapping.availablePermits());
         }
     }
 
@@ -2138,7 +2059,10 @@ public class SMatchGUI extends Observable implements Observer {
         }
 
         public void update(Observable o, Object arg) {
-            setEnabled(null != mm && null != mapping && null != mm.getMappingRenderer() && mappingModified);
+            setEnabled(null != getMatchManager() && null != mapping && null != getMatchManager().getMappingRenderer()
+                    && mappingModified
+                    // exclusivity because uses the same progress bar
+                    && PERMITS == semMapping.availablePermits());
         }
     }
 
@@ -2158,7 +2082,9 @@ public class SMatchGUI extends Observable implements Observer {
         }
 
         public void update(Observable o, Object arg) {
-            setEnabled(null != mm && null != mapping && null != mm.getMappingRenderer());
+            setEnabled(null != getMatchManager() && null != mapping && null != getMatchManager().getMappingRenderer()
+                    // exclusivity because uses the same progress bar
+                    && PERMITS == semMapping.availablePermits());
         }
     }
 
@@ -2198,10 +2124,10 @@ public class SMatchGUI extends Observable implements Observer {
     private final PopupListener treePopupListener = new PopupListener();
 
     //listener for config files combobox
-    private final ItemListener configCombolistener = new ItemListener() {
+    private final ItemListener configComboListener = new ItemListener() {
         public void itemStateChanged(ItemEvent e) {
             if ((e.getSource() == cbConfig) && (e.getStateChange() == ItemEvent.SELECTED)) {
-                if (null != mm) {
+                if (null != getMatchManager()) {
                     configFileName = (new File(GUI_CONF_FILE)).getParent() + File.separator + e.getItem();
                     updateMatchManagerConfig(configFileName);
                 }
@@ -3063,33 +2989,14 @@ public class SMatchGUI extends Observable implements Observer {
     }
 
     private void askMappingLocation() {
-        ff.setDescription(mm.getMappingRenderer().getDescription());
-        fc.addChoosableFileFilter(ff);
-        final int returnVal = fc.showSaveDialog(mainPanel);
-        fc.removeChoosableFileFilter(ff);
+        ff.setDescription(getMatchManager().getMappingRenderer().getDescription());
+        getFileChooser().addChoosableFileFilter(ff);
+        final int returnVal = getFileChooser().showSaveDialog(mainPanel);
+        getFileChooser().removeChoosableFileFilter(ff);
 
         if (returnVal == JFileChooser.APPROVE_OPTION) {
-            File file = fc.getSelectedFile();
-            mappingLocation = file.getAbsolutePath();
+            mappingLocation = getFileChooser().getSelectedFile().getAbsolutePath();
         }
-    }
-
-    private void saveMapping() {
-        if (null != mappingLocation) {
-            log.info("Saving mapping: " + mappingLocation);
-            try {
-                mm.renderMapping(mapping, mappingLocation);
-                mappingModified = false;
-            } catch (SMatchException e) {
-                if (log.isEnabledFor(Level.ERROR)) {
-                    log.error("Error while saving mapping", e);
-                }
-                JOptionPane.showMessageDialog(frame, "Error occurred while saving the mapping.\n\n" + e.getMessage() + "\n\nPlease, ensure the S-Match is intact, configured properly and try again.", "Mapping save error", JOptionPane.ERROR_MESSAGE);
-            }
-        }
-
-        setChanged();
-        notifyObservers();
     }
 
     private void closeMapping() {
@@ -3105,7 +3012,7 @@ public class SMatchGUI extends Observable implements Observer {
     }
 
     private void recreateMapping() {
-        IContextMapping<INode> newMapping = mm.getMappingFactory().getContextMappingInstance(source, target);
+        IContextMapping<INode> newMapping = getMatchManager().getMappingFactory().getContextMappingInstance(source, target);
         // not a nice solution, although matrix backing the mapping should be recreated anyway if a context changes
         newMapping.addAll(mapping);
         mapping = newMapping;
@@ -3124,7 +3031,7 @@ public class SMatchGUI extends Observable implements Observer {
     private void removeLinks(final JTree tree, final INode node) {
         // does not delete the links themselves, because it is called from the deleteNode, which
         // deletes the container node anyway
-        List<IMappingElement<INode>> links;
+        Set<IMappingElement<INode>> links;
         if (null != mapping) {
             if (tree == tSource) {
                 links = mapping.getSources(node);
@@ -3228,64 +3135,627 @@ public class SMatchGUI extends Observable implements Observer {
         }
     }
 
-    private void openSource(File file) {
-        log.info("Opening source: " + file.getAbsolutePath() + "");
-
-        try {
-            source = loadTree(file.getAbsolutePath());
-            if (null != target) {
-                mapping = mm.getMappingFactory().getContextMappingInstance(source, target);
-                resetMappingInModel(tTarget);
-                resetMappingInTable();
-            }
-            createTree(source, tSource, mapping);
-            sourceLocation = file.getAbsolutePath();
-        } catch (SMatchException e) {
-            if (log.isEnabledFor(Level.ERROR)) {
-                log.error("Error while loading context from " + file.getAbsolutePath(), e);
-            }
-            JOptionPane.showMessageDialog(frame, "Error occurred while loading the context from " + file.getAbsolutePath() + "\n\n" + e.getMessage() + "\n\nPlease, ensure the file format is correct.", "Context loading error", JOptionPane.ERROR_MESSAGE);
-        }
-
-        setChanged();
-        notifyObservers();
+    private void openSource(final File file) {
+        SwingWorker<IContext, INode> sourceLoadingTask =
+                createContextLoadingTask(file, semSource, pbSourceProgress, true);
+        sourceLoadingTask.execute();
     }
 
-    private void openTarget(File file) {
-        log.info("Opening target: " + file.getAbsolutePath() + "");
+    private void openTarget(final File file) {
+        SwingWorker<IContext, INode> targetLoadingTask =
+                createContextLoadingTask(file, semTarget, pbTargetProgress, false);
+        targetLoadingTask.execute();
+    }
 
-        try {
-            target = loadTree(file.getAbsolutePath());
-            if (null != source) {
-                mapping = mm.getMappingFactory().getContextMappingInstance(source, target);
-                resetMappingInModel(tSource);
-                resetMappingInTable();
+    private void saveSource(final String location) {
+        SwingWorker<Void, INode> sourceRenderingTask =
+                createContextRenderingTask(source, location, semSource, pbSourceProgress, true);
+        sourceRenderingTask.execute();
+    }
+
+    private void saveTarget(final String location) {
+        SwingWorker<Void, INode> targetRenderingTask =
+                createContextRenderingTask(target, location, semTarget, pbTargetProgress, false);
+        targetRenderingTask.execute();
+    }
+
+    private void createLoadingTree(JTree tree) {
+        createTree(null, tree, null);
+        tree.setModel(new DefaultTreeModel(new DefaultMutableTreeNode(LOADING_LABEL)));
+    }
+
+    private SwingWorker<IContext, INode> createContextLoadingTask(final File file,
+                                                                  final Semaphore semContext,
+                                                                  final JProgressBar pbContext,
+                                                                  final boolean processingSource) {
+
+        pbContext.setIndeterminate(true);
+
+        final AsyncTask<IContext, INode> loadingTask;
+        if (getMatchManager().getContextLoader() instanceof IAsyncContextLoader) {
+            IAsyncContextLoader acl = (IAsyncContextLoader) getMatchManager().getContextLoader();
+            loadingTask = acl.asyncLoad(file.getAbsolutePath());
+            setupTaskProgressBarAndHandler(loadingTask, pbContext);
+
+        } else {
+            loadingTask = null;
+        }
+
+        SwingWorker<IContext, INode> task = new SwingWorker<IContext, INode>() {
+            @Override
+            protected IContext doInBackground() throws Exception {
+                semManager.acquire();
+                semContext.acquire(PERMITS);
+                semMapping.acquire();
+                if (null != loadingTask) {
+                    loadingTask.execute();
+                    return loadingTask.get();
+                } else {
+                    return (IContext) getMatchManager().loadContext(file.getAbsolutePath());
+                }
             }
-            createTree(target, tTarget, mapping);
-            targetLocation = file.getAbsolutePath();
-        } catch (SMatchException e) {
-            if (log.isEnabledFor(Level.ERROR)) {
-                log.error("Error while loading context from " + file.getAbsolutePath(), e);
+
+            @Override
+            protected void done() {
+                super.done();
+                if (!isCancelled()) {
+                    try {
+                        if (processingSource) {
+                            source = get();
+                            log.info("Opened source");
+                        } else {
+                            target = get();
+                            log.info("Opened target");
+                        }
+                        if (null != source && null != target) {
+                            mapping = getMatchManager().getMappingFactory().getContextMappingInstance(source, target);
+                        }
+                        if (!processingSource && null != source) {
+                            resetMappingInModel(tSource);
+                            resetMappingInTable();
+                        }
+                        if (processingSource && null != target) {
+                            resetMappingInModel(tTarget);
+                            resetMappingInTable();
+                        }
+                        if (processingSource) {
+                            sourceLocation = file.getAbsolutePath();
+                        } else {
+                            targetLocation = file.getAbsolutePath();
+                        }
+                    } catch (InterruptedException e) {
+                        // ok, leave source as it was
+                    } catch (ExecutionException e) {
+                        if (log.isEnabledFor(Level.ERROR)) {
+                            log.error("Error while loading context from " + file.getAbsolutePath(), e.getCause());
+                        }
+                        JOptionPane.showMessageDialog(frame, "Error occurred while loading the context from " + file.getAbsolutePath() + "\n\n" + e.getCause().getMessage() + "\n\nPlease, ensure the file exists and its format is correct.", "Context loading error", JOptionPane.ERROR_MESSAGE);
+                    }
+                }
+
+                // changes "loading..." to the tree
+                if (processingSource) {
+                    createTree(source, tSource, mapping);
+                } else {
+                    createTree(target, tTarget, mapping);
+                }
+                pbContext.setVisible(false);
+                semMapping.release();
+                semContext.release(PERMITS);
+                semManager.release();
+                setChanged();
+                notifyObservers();
             }
-            JOptionPane.showMessageDialog(frame, "Error occurred while loading the context from " + file.getAbsolutePath() + "\n\n" + e.getMessage() + "\n\nPlease, ensure the file format is correct.", "Context loading error", JOptionPane.ERROR_MESSAGE);
+        };
+        task.addPropertyChangeListener(new PropertyChangeListener() {
+            @Override
+            public void propertyChange(PropertyChangeEvent evt) {
+                if ("state".equals(evt.getPropertyName())) {
+                    SwingWorker.StateValue oldState = (SwingWorker.StateValue) evt.getOldValue();
+                    SwingWorker.StateValue newState = (SwingWorker.StateValue) evt.getNewValue();
+                    if (SwingWorker.StateValue.PENDING == oldState && SwingWorker.StateValue.STARTED == newState) {
+                        if (processingSource) {
+                            log.info("Opening source: " + file.getAbsolutePath());
+                            createLoadingTree(tSource);
+                        } else {
+                            log.info("Opening target: " + file.getAbsolutePath());
+                            createLoadingTree(tTarget);
+                        }
+
+                        pbContext.setVisible(true);
+
+                        setChanged();
+                        notifyObservers();
+                    }
+                    handleUITaskCompletion(oldState, newState, pbContext);
+                }
+            }
+        });
+        return task;
+    }
+
+    private SwingWorker<Void, INode> createContextRenderingTask(final IContext context, final String location,
+                                                                final Semaphore semContext,
+                                                                final JProgressBar pbContext,
+                                                                final boolean processingSource) {
+        pbContext.setIndeterminate(true);
+
+        final AsyncTask<Void, INode> renderingTask;
+        if (getMatchManager().getContextRenderer() instanceof IAsyncContextRenderer) {
+            IAsyncContextRenderer acl = (IAsyncContextRenderer) getMatchManager().getContextRenderer();
+            renderingTask = acl.asyncRender(context, location);
+            setupTaskProgressBarAndHandler(renderingTask, pbContext);
+        } else {
+            renderingTask = null;
+        }
+
+        SwingWorker<Void, INode> task = new SwingWorker<Void, INode>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                semManager.acquire();
+                semContext.acquire(PERMITS);
+                semMapping.acquire();
+                if (null != renderingTask) {
+                    renderingTask.execute();
+                    renderingTask.get();
+                } else {
+                    getMatchManager().renderContext(context, location);
+                }
+                return null;
+            }
+
+            @Override
+            protected void done() {
+                super.done();
+                if (!isCancelled()) {
+                    try {
+                        get();
+                        if (processingSource) {
+                            sourceModified = false;
+                            log.info("Saved source");
+                        } else {
+                            targetModified = false;
+                            log.info("Saved target");
+                        }
+                    } catch (InterruptedException e) {
+                        // ok, leave source as it was
+                    } catch (ExecutionException e) {
+                        if (log.isEnabledFor(Level.ERROR)) {
+                            log.error("Error while rendering context to " + location, e.getCause());
+                        }
+                        JOptionPane.showMessageDialog(frame, "Error occurred while rendering context to " + location + "\n\n" + e.getCause().getMessage() + "\n\nPlease, ensure the S-Match is intact, configured properly and try again.", "Context rendering error", JOptionPane.ERROR_MESSAGE);
+                    }
+                }
+
+                pbContext.setVisible(false);
+                semMapping.release();
+                semContext.release(PERMITS);
+                semManager.release();
+                setChanged();
+                notifyObservers();
+            }
+        };
+        task.addPropertyChangeListener(new PropertyChangeListener() {
+            @Override
+            public void propertyChange(PropertyChangeEvent evt) {
+                if ("state".equals(evt.getPropertyName())) {
+                    SwingWorker.StateValue oldState = (SwingWorker.StateValue) evt.getOldValue();
+                    SwingWorker.StateValue newState = (SwingWorker.StateValue) evt.getNewValue();
+                    if (SwingWorker.StateValue.PENDING == oldState && SwingWorker.StateValue.STARTED == newState) {
+                        if (processingSource) {
+                            log.info("Saving source: " + location);
+                        } else {
+                            log.info("Saving target: " + location);
+                        }
+
+                        pbContext.setVisible(true);
+
+                        setChanged();
+                        notifyObservers();
+                    }
+                    handleUITaskCompletion(oldState, newState, pbContext);
+                }
+            }
+        });
+        return task;
+    }
+
+    private SwingWorker<Void, Void> createContextOfflineTask(final IContext context,
+                                                             final Semaphore semContext,
+                                                             final JProgressBar pbContext,
+                                                             final boolean processingSource) {
+        pbContext.setIndeterminate(true);
+
+        final AsyncTask<Void, INode> offlineTask;
+        if (getMatchManager() instanceof IAsyncMatchManager) {
+            IAsyncMatchManager amm = (IAsyncMatchManager) getMatchManager();
+            offlineTask = amm.asyncOffline(context);
+            setupTaskProgressBarAndHandler(offlineTask, pbContext);
+        } else {
+            offlineTask = null;
+        }
+        SwingWorker<Void, Void> task = new SwingWorker<Void, Void>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                semManager.acquire();
+                semContext.acquire(PERMITS);
+                semMapping.acquire();
+                if (null != offlineTask) {
+                    offlineTask.execute();
+                    offlineTask.get();
+                } else {
+                    getMatchManager().offline(context);
+                }
+                return null;
+            }
+
+            @Override
+            protected void done() {
+                super.done();
+                if (!isCancelled()) {
+                    try {
+                        get();
+                        if (processingSource) {
+                            log.info("Preprocessed source");
+                            sourceModified = true;
+                        } else {
+                            log.info("Preprocessed target");
+                            targetModified = true;
+                        }
+                    } catch (InterruptedException e) {
+                        // ok, leave source as it was
+                    } catch (ExecutionException e) {
+                        if (log.isEnabledFor(Level.ERROR)) {
+                            log.error("Error while preprocessing context: " + e.getCause().getMessage(), e.getCause());
+                        }
+                        JOptionPane.showMessageDialog(frame, "Error occurred while preprocessing context:\n\n" + e.getCause().getMessage()
+                                        + "\n\nPlease, ensure the S-Match is intact, configured properly and try again.",
+                                "Context rendering error", JOptionPane.ERROR_MESSAGE);
+                    }
+                }
+
+                pbContext.setVisible(false);
+                semMapping.release();
+                semContext.release(PERMITS);
+                semManager.release();
+                setChanged();
+                notifyObservers();
+            }
+        };
+        task.addPropertyChangeListener(new PropertyChangeListener() {
+            @Override
+            public void propertyChange(PropertyChangeEvent evt) {
+                if ("state".equals(evt.getPropertyName())) {
+                    SwingWorker.StateValue oldState = (SwingWorker.StateValue) evt.getOldValue();
+                    SwingWorker.StateValue newState = (SwingWorker.StateValue) evt.getNewValue();
+                    if (SwingWorker.StateValue.PENDING == oldState && SwingWorker.StateValue.STARTED == newState) {
+                        if (processingSource) {
+                            log.info("Preprocessing source...");
+                        } else {
+                            log.info("Preprocessing target...");
+                        }
+
+                        pbContext.setVisible(true);
+
+                        setChanged();
+                        notifyObservers();
+                    }
+                    handleUITaskCompletion(oldState, newState, pbContext);
+                }
+            }
+        });
+        return task;
+    }
+
+    private SwingWorker<IContextMapping<INode>, IMappingElement<INode>> createMatchTask() {
+        final SwingWorker<Void, Void> sourcePreprocess;
+        final SwingWorker<Void, Void> targetPreprocess;
+        if (!source.getRoot().getNodeData().isSubtreePreprocessed()) {
+            sourcePreprocess = createContextOfflineTask(source, semSource, pbSourceProgress, true);
+        } else {
+            sourcePreprocess = null;
+        }
+        if (!target.getRoot().getNodeData().isSubtreePreprocessed()) {
+            targetPreprocess = createContextOfflineTask(target, semTarget, pbTargetProgress, false);
+        } else {
+            targetPreprocess = null;
+        }
+
+        // prepare the match task
+        pbProgress.setIndeterminate(true);
+        final AsyncTask<IContextMapping<INode>, IMappingElement<INode>> matchTask;
+        if (getMatchManager() instanceof IAsyncMatchManager) {
+            IAsyncMatchManager amm = (IAsyncMatchManager) getMatchManager();
+            matchTask = amm.asyncOnline(source, target);
+            setupTaskProgressBarAndHandler(matchTask, pbProgress);
+        } else {
+            matchTask = null;
+        }
+        SwingWorker<IContextMapping<INode>, IMappingElement<INode>> task =
+                new SwingWorker<IContextMapping<INode>, IMappingElement<INode>>() {
+                    @Override
+                    public IContextMapping<INode> doInBackground() throws Exception {
+                        if (null != sourcePreprocess) {
+                            sourcePreprocess.execute();
+                        }
+                        if (null != targetPreprocess) {
+                            targetPreprocess.execute();
+                        }
+                        if (null != sourcePreprocess) {
+                            sourcePreprocess.get();
+                        }
+                        if (null != targetPreprocess) {
+                            targetPreprocess.get();
+                        }
+
+                        semManager.acquire();
+                        semSource.acquire();
+                        semTarget.acquire();
+                        semMapping.acquire(PERMITS);
+                        if ((null == sourcePreprocess || !sourcePreprocess.isCancelled()) &&
+                                (null == targetPreprocess || !targetPreprocess.isCancelled())) {
+                            if (null != matchTask) {
+                                matchTask.execute();
+                                IContextMapping<INode> result = matchTask.get();
+                                if (matchTask.isCancelled()) {
+                                    cancel(true);
+                                }
+                                return result;
+                            } else {
+                                return getMatchManager().online(source, target);
+                            }
+                        } else {
+                            // some preprocessing was cancelled
+                            cancel(true);
+                            return null;
+                        }
+                    }
+
+                    @Override
+                    public void done() {
+                        if (!isCancelled()) {
+                            try {
+                                mapping = get();
+                            } catch (InterruptedException e) {
+                                // ok, leave source as it was
+                            } catch (ExecutionException e) {
+                                if (log.isEnabledFor(Level.ERROR)) {
+                                    log.error("Error while creating a mapping between source and target contexts", e.getCause());
+                                }
+                                JOptionPane.showMessageDialog(frame, "Error occurred while creating the mapping:\n\n" + e.getCause().getMessage()
+                                                + "\n\nPlease, ensure the S-Match is intact, configured properly and try again.",
+                                        "Mapping creation error", JOptionPane.ERROR_MESSAGE);
+                            }
+                        }
+
+                        resetMappingInTable();
+                        createTree(source, tSource, mapping);
+                        createTree(target, tTarget, mapping);
+                        mappingLocation = null;
+                        mappingModified = true;
+
+                        pbProgress.setVisible(false);
+                        semMapping.release(PERMITS);
+                        semTarget.release();
+                        semSource.release();
+                        semManager.release();
+                        setChanged();
+                        notifyObservers();
+                    }
+                };
+        task.addPropertyChangeListener(new PropertyChangeListener() {
+            @Override
+            public void propertyChange(PropertyChangeEvent evt) {
+                if ("state".equals(evt.getPropertyName())) {
+                    SwingWorker.StateValue oldState = (SwingWorker.StateValue) evt.getOldValue();
+                    SwingWorker.StateValue newState = (SwingWorker.StateValue) evt.getNewValue();
+                    if (SwingWorker.StateValue.PENDING == oldState && SwingWorker.StateValue.STARTED == newState) {
+                        pbProgress.setVisible(true);
+
+                        setChanged();
+                        notifyObservers();
+                    }
+                    handleUITaskCompletion(oldState, newState, pbProgress);
+                }
+            }
+        });
+        return task;
+    }
+
+    private void openMapping(final File file) {
+        pbProgress.setIndeterminate(true);
+
+        final AsyncTask<IContextMapping<INode>, IMappingElement<INode>> loadingTask;
+        if (getMatchManager().getMappingLoader() instanceof IAsyncMappingLoader) {
+            IAsyncMappingLoader acl = (IAsyncMappingLoader) getMatchManager().getMappingLoader();
+            loadingTask = acl.asyncLoad(source, target, file.getAbsolutePath());
+            setupTaskProgressBarAndHandler(loadingTask, pbProgress);
+        } else {
+            loadingTask = null;
+        }
+
+        SwingWorker<IContextMapping<INode>, IMappingElement<INode>> task =
+                new SwingWorker<IContextMapping<INode>, IMappingElement<INode>>() {
+                    @Override
+                    protected IContextMapping<INode> doInBackground() throws Exception {
+                        semManager.acquire();
+                        semSource.acquire();
+                        semTarget.acquire();
+                        semMapping.acquire(PERMITS);
+                        if (null != loadingTask) {
+                            loadingTask.execute();
+                            return loadingTask.get();
+                        } else {
+                            return getMatchManager().loadMapping(source, target, file.getAbsolutePath());
+                        }
+                    }
+
+                    @Override
+                    protected void done() {
+                        super.done();
+                        if (!isCancelled()) {
+                            try {
+                                mapping = get();
+                                mappingLocation = file.getAbsolutePath();
+
+                                createTree(source, tSource, mapping);
+                                createTree(target, tTarget, mapping);
+                            } catch (InterruptedException e) {
+                                // ok, leave it as it was
+                            } catch (ExecutionException e) {
+                                if (log.isEnabledFor(Level.ERROR)) {
+                                    log.error("Error while loading mapping from " + file.getAbsolutePath(), e.getCause());
+                                }
+                                JOptionPane.showMessageDialog(frame, "Error occurred while loading the mapping from " + file.getAbsolutePath() + "\n\n" + e.getCause().getMessage() + "\n\nPlease, ensure the file exists and its format is correct.", "Mapping loading error", JOptionPane.ERROR_MESSAGE);
+                            }
+                        }
+
+                        // changes "loading..." to the new one or the old one
+                        resetMappingInTable();
+                        pnContexts.repaint();
+
+                        pbProgress.setVisible(false);
+                        semMapping.release(PERMITS);
+                        semTarget.release();
+                        semSource.release();
+                        semManager.release();
+                        setChanged();
+                        notifyObservers();
+                    }
+                };
+        task.addPropertyChangeListener(new PropertyChangeListener() {
+            @Override
+            public void propertyChange(PropertyChangeEvent evt) {
+                if ("state".equals(evt.getPropertyName())) {
+                    SwingWorker.StateValue oldState = (SwingWorker.StateValue) evt.getOldValue();
+                    SwingWorker.StateValue newState = (SwingWorker.StateValue) evt.getNewValue();
+                    if (SwingWorker.StateValue.PENDING == oldState && SwingWorker.StateValue.STARTED == newState) {
+                        log.info("Opening mapping: " + file.getAbsolutePath());
+                        if (!(getMatchManager().getMappingLoader() instanceof IAsyncMappingLoader)) {
+                            pbProgress.setIndeterminate(true);
+                        }
+                        pbProgress.setVisible(true);
+
+                        tblMapping.setModel(new DefaultTableModel(
+                                new Vector<>(Collections.emptyList()),
+                                new Vector<>(Arrays.asList(LOADING_LABEL))));
+
+                        setChanged();
+                        notifyObservers();
+                    }
+                    handleUITaskCompletion(oldState, newState, pbProgress);
+                }
+            }
+        });
+        task.execute();
+    }
+
+    private void saveMapping() {
+        pbProgress.setIndeterminate(true);
+
+        final AsyncTask<Void, IMappingElement<INode>> savingTask;
+        if (getMatchManager().getMappingRenderer() instanceof IAsyncMappingRenderer) {
+            IAsyncMappingRenderer acl = (IAsyncMappingRenderer) getMatchManager().getMappingRenderer();
+            savingTask = acl.asyncRender(mapping, mappingLocation);
+            setupTaskProgressBarAndHandler(savingTask, pbProgress);
+        } else {
+            savingTask = null;
+        }
+
+        SwingWorker<Void, IMappingElement<INode>> task = new SwingWorker<Void, IMappingElement<INode>>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                semManager.acquire();
+                semSource.acquire();
+                semTarget.acquire();
+                semMapping.acquire(PERMITS);
+                if (null != savingTask) {
+                    savingTask.execute();
+                    savingTask.get();
+                } else {
+                    getMatchManager().renderMapping(mapping, mappingLocation);
+                }
+                return null;
+            }
+
+            @Override
+            protected void done() {
+                super.done();
+                if (!isCancelled()) {
+                    try {
+                        get();
+                        mappingModified = false;
+                    } catch (InterruptedException e) {
+                        // ok, leave it as it was
+                    } catch (ExecutionException e) {
+                        if (log.isEnabledFor(Level.ERROR)) {
+                            log.error("Error while saving mapping to " + mappingLocation, e.getCause());
+                        }
+                        JOptionPane.showMessageDialog(frame, "Error occurred while saving the mapping to " + mappingLocation + "\n\n" + e.getCause().getMessage() + "\n\nPlease, ensure the S-Match is intact, configured properly and try again.", "Mapping saving error", JOptionPane.ERROR_MESSAGE);
+                    }
+                }
+
+                pbProgress.setVisible(false);
+                semMapping.release(PERMITS);
+                semTarget.release();
+                semSource.release();
+                semManager.release();
+                setChanged();
+                notifyObservers();
+            }
+        };
+        task.addPropertyChangeListener(new PropertyChangeListener() {
+            @Override
+            public void propertyChange(PropertyChangeEvent evt) {
+                if ("state".equals(evt.getPropertyName())) {
+                    SwingWorker.StateValue oldState = (SwingWorker.StateValue) evt.getOldValue();
+                    SwingWorker.StateValue newState = (SwingWorker.StateValue) evt.getNewValue();
+                    if (SwingWorker.StateValue.PENDING == oldState && SwingWorker.StateValue.STARTED == newState) {
+                        log.info("Saving mapping: " + mappingLocation);
+                        if (!(getMatchManager().getMappingLoader() instanceof IAsyncMappingLoader)) {
+                            pbProgress.setIndeterminate(true);
+                        }
+                        pbProgress.setVisible(true);
+
+                        setChanged();
+                        notifyObservers();
+                    }
+                    handleUITaskCompletion(oldState, newState, pbProgress);
+                }
+            }
+        });
+        task.execute();
+    }
+
+    private void setupTaskProgressBarAndHandler(final AsyncTask asyncTask, final JProgressBar progressBar) {
+        if (0 < asyncTask.getTotal()) {
+            progressBar.setIndeterminate(false);
+            progressBar.setMaximum(100);
+            progressBar.setMinimum(0);
+            progressBar.setValue(0);
+
+            // set up progress handler
+            asyncTask.addPropertyChangeListener(new PropertyChangeListener() {
+                private final long total = asyncTask.getTotal();
+
+                @Override
+                public void propertyChange(PropertyChangeEvent evt) {
+                    if ("progress".equals(evt.getPropertyName())) {
+                        Long progress = (Long) evt.getNewValue();
+                        progressBar.setValue((int) (100 * (progress / (double) total)));
+                    }
+                }
+            });
         }
     }
 
-    private void openMapping(File file) {
-        log.info("Opening mapping: " + file.getAbsolutePath() + "");
+    private void handleUITaskCompletion(SwingWorker.StateValue oldState, SwingWorker.StateValue newState, JProgressBar pbContext) {
+        if (SwingWorker.StateValue.STARTED == oldState && SwingWorker.StateValue.DONE == newState) {
+            pbContext.setIndeterminate(false);
+            pbContext.setVisible(false);
 
-        try {
-            mapping = mm.loadMapping(source, target, file.getAbsolutePath());
-            createTree(source, tSource, mapping);
-            createTree(target, tTarget, mapping);
-            resetMappingInTable();
-            pnContexts.repaint();
-            mappingLocation = file.getAbsolutePath();
-        } catch (SMatchException e) {
-            if (log.isEnabledFor(Level.ERROR)) {
-                log.error("Error while loading the mapping", e);
-            }
-            JOptionPane.showMessageDialog(frame, "Error occurred while loading the mapping from " + file.getAbsolutePath() + ".\n\n" + e.getMessage() + "\n\nPlease, ensure the mapping file is correct and try again.", "Mapping loading error", JOptionPane.ERROR_MESSAGE);
+            setChanged();
+            notifyObservers();
         }
     }
 
@@ -3336,6 +3806,9 @@ public class SMatchGUI extends Observable implements Observer {
         }
         teMappingLocation.setText(mappingLocationText);
         teMappingLocation.setToolTipText(mappingLocationText);
+
+        tSource.setEditable(PERMITS == semSource.availablePermits());
+        tTarget.setEditable(PERMITS == semTarget.availablePermits());
     }
 
     private void buildMenu() {
@@ -3410,13 +3883,14 @@ public class SMatchGUI extends Observable implements Observer {
 
         JMenu jmHelp = new JMenu("Help");
         jmHelp.setMnemonic('H');
-        jmHelp.add(new ActionBrowseURL("http://sourceforge.net/apps/trac/s-match/wiki/Manual", "Open S-Match Manual..."));
+        jmHelp.add(new ActionBrowseURL("https://github.com/s-match/s-match-core/wiki", "Open S-Match Documentation..."));
         jmHelp.add(new ActionBrowseURL("http://sourceforge.net/projects/s-match/", "Open S-Match project web site..."));
         jmHelp.add(new ActionBrowseURL("http://semanticmatching.org/", "Open SemanticMatching.org web site..."));
         mainMenu.add(jmHelp);
     }
 
     private void buildStaticGUI() {
+        log.info("Building the GUI...");
         acSourceCreate = new ActionSourceCreate();
         acSourceOpen = new ActionSourceOpen();
         acSourcePreprocess = new ActionSourcePreprocess();
@@ -3447,12 +3921,14 @@ public class SMatchGUI extends Observable implements Observer {
 
         acConfigurationEdit = new ActionConfigurationEdit();
 
+        log.debug("Built actions");
         String layoutColumns = "fill:default:grow";
-        String layoutRows = "top:d:noGrow,top:4dlu:noGrow,top:d:noGrow,top:4dlu:noGrow,fill:max(d;100px):grow";
+        String layoutRows = "top:d:noGrow,top:4dlu:noGrow,top:d:noGrow,top:4dlu:noGrow,fill:max(d;100px):grow,bottom:2dlu:noGrow,bottom:d:noGrow";
 
         FormLayout layout = new FormLayout(layoutColumns, layoutRows);
-        //PanelBuilder builder = new PanelBuilder(layout, new FormDebugPanel());
-        PanelBuilder builder = new PanelBuilder(layout);
+        // TODO remove debug
+        PanelBuilder builder = new PanelBuilder(layout, new FormDebugPanel());
+//        PanelBuilder builder = new PanelBuilder(layout);
         //builder.setDefaultDialogBorder();
         CellConstraints cc = new CellConstraints();
 
@@ -3493,16 +3969,19 @@ public class SMatchGUI extends Observable implements Observer {
         int defConfigIndex = cmConfigs.getIndexOf(configName);
         if (-1 != defConfigIndex) {
             cmConfigs.setSelectedItem(cmConfigs.getElementAt(defConfigIndex));
+            cbConfigPrevIndex = defConfigIndex;
         }
         cbConfig.setModel(cmConfigs);
-        cbConfig.addItemListener(configCombolistener);
+        cbConfig.addItemListener(configComboListener);
         tbMain.add(cbConfig);
 
+        // build mapping location field
         teMappingLocation = new JTextField();
         teMappingLocation.setEnabled(false);
         teMappingLocation.setHorizontalAlignment(JTextField.RIGHT);
         ToolTipManager.sharedInstance().registerComponent(teMappingLocation);
         builder.add(teMappingLocation, cc.xy(1, 3, CellConstraints.FILL, CellConstraints.FILL));
+        log.debug("Built toolbars");
 
 
         //build trees panel
@@ -3532,12 +4011,13 @@ public class SMatchGUI extends Observable implements Observer {
         pnContexts.add(spnContexts, cc.xy(1, 1));
 
         //build source
-        JPanel pnSource = new JPanel();
-        pnSource.setLayout(new FormLayout("fill:d:grow", "center:d:noGrow,top:4dlu:noGrow,center:d:noGrow,top:4dlu:noGrow,center:d:grow"));
-        spnContexts.setLeftComponent(pnSource);
+        FormLayout pnSourceLayout = new FormLayout("fill:d:grow", "center:d:noGrow,top:4dlu:noGrow,center:d:noGrow,top:4dlu:noGrow,center:d:grow,bottom:2dlu:noGrow,bottom:d:noGrow");
+        // TODO remove debug
+        PanelBuilder pnSourceBuilder = new PanelBuilder(pnSourceLayout, new FormDebugPanel());
+//        PanelBuilder pnSourceBuilder = new PanelBuilder(pnSourceLayout);
         JToolBar tbSource = new JToolBar();
         tbSource.setFloatable(false);
-        pnSource.add(tbSource, cc.xy(1, 1, CellConstraints.FILL, CellConstraints.DEFAULT));
+        pnSourceBuilder.add(tbSource, cc.xy(1, 1, CellConstraints.FILL, CellConstraints.DEFAULT));
         JButton btSourceCreate = new JButton(acSourceCreate);
         btSourceCreate.setHideActionText(true);
         tbSource.add(btSourceCreate);
@@ -3551,10 +4031,10 @@ public class SMatchGUI extends Observable implements Observer {
         teSourceContextLocation = new JTextField();
         teSourceContextLocation.setEnabled(false);
         teSourceContextLocation.setHorizontalAlignment(JTextField.RIGHT);
-        pnSource.add(teSourceContextLocation, cc.xy(1, 3, CellConstraints.FILL, CellConstraints.FILL));
+        pnSourceBuilder.add(teSourceContextLocation, cc.xy(1, 3, CellConstraints.FILL, CellConstraints.FILL));
         ToolTipManager.sharedInstance().registerComponent(teSourceContextLocation);
         spSource = new JScrollPane();
-        pnSource.add(spSource, cc.xy(1, 5, CellConstraints.FILL, CellConstraints.FILL));
+        pnSourceBuilder.add(spSource, cc.xy(1, 5, CellConstraints.FILL, CellConstraints.FILL));
         tSource = new JTree(new DefaultMutableTreeNode(EMPTY_ROOT_NODE_LABEL));
         ToolTipManager.sharedInstance().registerComponent(tSource);
         tSource.addMouseListener(treeMouseListener);
@@ -3580,6 +4060,11 @@ public class SMatchGUI extends Observable implements Observer {
         btSourceUncoalesceAll.setHideActionText(true);
         tbSource.addSeparator();
         tbSource.add(btSourceUncoalesceAll);
+        pbSourceProgress = new JProgressBar(0, 100);
+        pbSourceProgress.setVisible(false);
+        pnSourceBuilder.add(pbSourceProgress, cc.xy(1, 7, CellConstraints.FILL, CellConstraints.FILL));
+        // build and set source panel
+        spnContexts.setLeftComponent(pnSourceBuilder.build());
 
         popSource = new JPopupMenu();
         popSource.add(acSourceAddNode);
@@ -3587,12 +4072,13 @@ public class SMatchGUI extends Observable implements Observer {
         popSource.add(acSourceDelete);
 
         //build target
-        JPanel pnTarget = new JPanel();
-        pnTarget.setLayout(new FormLayout("fill:d:grow", "center:d:noGrow,top:4dlu:noGrow,center:d:noGrow,top:4dlu:noGrow,center:d:grow"));
-        spnContexts.setRightComponent(pnTarget);
+        FormLayout pnTargetLayout = new FormLayout("fill:d:grow", "center:d:noGrow,top:4dlu:noGrow,center:d:noGrow,top:4dlu:noGrow,center:d:grow,bottom:2dlu:noGrow,bottom:d:noGrow");
+        // TODO remove debug
+        PanelBuilder pnTargetBuilder = new PanelBuilder(pnTargetLayout, new FormDebugPanel());
+//        PanelBuilder pnTargetBuilder = new PanelBuilder(pnTargetLayout);
         JToolBar tbTarget = new JToolBar();
         tbTarget.setFloatable(false);
-        pnTarget.add(tbTarget, cc.xy(1, 1, CellConstraints.FILL, CellConstraints.DEFAULT));
+        pnTargetBuilder.add(tbTarget, cc.xy(1, 1, CellConstraints.FILL, CellConstraints.DEFAULT));
         JButton btTargetCreate = new JButton(acTargetCreate);
         btTargetCreate.setHideActionText(true);
         tbTarget.add(btTargetCreate);
@@ -3606,10 +4092,10 @@ public class SMatchGUI extends Observable implements Observer {
         teTargetContextLocation = new JTextField();
         teTargetContextLocation.setEnabled(false);
         teTargetContextLocation.setHorizontalAlignment(JTextField.RIGHT);
-        pnTarget.add(teTargetContextLocation, cc.xy(1, 3, CellConstraints.FILL, CellConstraints.FILL));
+        pnTargetBuilder.add(teTargetContextLocation, cc.xy(1, 3, CellConstraints.FILL, CellConstraints.FILL));
         ToolTipManager.sharedInstance().registerComponent(teTargetContextLocation);
         spTarget = new JScrollPane();
-        pnTarget.add(spTarget, cc.xy(1, 5, CellConstraints.FILL, CellConstraints.FILL));
+        pnTargetBuilder.add(spTarget, cc.xy(1, 5, CellConstraints.FILL, CellConstraints.FILL));
         tTarget = new JTree(new DefaultMutableTreeNode(EMPTY_ROOT_NODE_LABEL));
         ToolTipManager.sharedInstance().registerComponent(tTarget);
         tTarget.addMouseListener(treeMouseListener);
@@ -3635,19 +4121,26 @@ public class SMatchGUI extends Observable implements Observer {
         btTargetUncoalesceAll.setHideActionText(true);
         tbTarget.addSeparator();
         tbTarget.add(btTargetUncoalesceAll);
+        pbTargetProgress = new JProgressBar(0, 100);
+        pbTargetProgress.setVisible(false);
+        pnTargetBuilder.add(pbTargetProgress, cc.xy(1, 7, CellConstraints.FILL, CellConstraints.FILL));
+        // build and set target panel
+        spnContexts.setRightComponent(pnTargetBuilder.build());
+
 
         popTarget = new JPopupMenu();
         popTarget.add(acTargetAddNode);
         popTarget.add(acTargetAddChildNode);
         popTarget.add(acTargetDelete);
+        log.debug("Built trees");
+
 
         //build mapping table
         tblMapping = new JTable(new MappingTableModel(null));
-        spMappingTable = new JScrollPane(tblMapping);
         tblMapping.setFillsViewportHeight(true);
-        spnContextsMapping.setBottomComponent(spMappingTable);
         tblMapping.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         tblMapping.setDefaultRenderer(IMappingElement.class, mappingTableCellRenderer);
+        spnContextsMapping.setBottomComponent(new JScrollPane(tblMapping));
 
         //build log panel
         JPanel pnLog = new JPanel();
@@ -3664,13 +4157,17 @@ public class SMatchGUI extends Observable implements Observer {
         org.apache.log4j.lf5.viewer.LF5SwingUtils.makeVerticalScrollBarTrack(spLog);
 
         //build status bar
+        pbProgress = new JProgressBar(0, 100);
+        builder.add(pbProgress, cc.xy(1, 7, CellConstraints.FILL, CellConstraints.FILL));
+        pbProgress.setVisible(false);
+        log.debug("Built mapping");
 
         //FormDebugUtils.dumpAll(builder.getPanel());
         mainPanel = builder.getPanel();
-
-        fc = new JFileChooser();
+        log.debug("Built main panel");
 
         buildMenu();
+        log.debug("Built menu");
 
         Action[] actions = new Action[]{
                 acSourceCreate, acSourceAddNode, acSourceAddChildNode, acSourceDelete, acSourceUncoalesce, acSourceUncoalesceAll,
@@ -3688,10 +4185,14 @@ public class SMatchGUI extends Observable implements Observer {
             }
         }
         this.addObserver(this);
+        log.debug("Set up actions");
     }
 
-    private IContext loadTree(String fileName) throws SMatchException {
-        return (IContext) mm.loadContext(fileName);
+    private JFileChooser getFileChooser() {
+        if (null == fc) {
+            fc = new JFileChooser();
+        }
+        return fc;
     }
 
     /**
@@ -3703,9 +4204,7 @@ public class SMatchGUI extends Observable implements Observer {
      */
     private void createTree(final IContext context, final JTree jTree, final IContextMapping<INode> mapping) {
         if (null == context) {
-            String label;
-            label = EMPTY_ROOT_NODE_LABEL;
-            jTree.setModel(new DefaultTreeModel(new DefaultMutableTreeNode(label)));
+            jTree.setModel(new DefaultTreeModel(new DefaultMutableTreeNode(EMPTY_ROOT_NODE_LABEL)));
             jTree.removeTreeSelectionListener(treeSelectionListener);
             jTree.removeFocusListener(treeFocusListener);
             jTree.setCellRenderer(new DefaultTreeCellRenderer());
@@ -3746,7 +4245,6 @@ public class SMatchGUI extends Observable implements Observer {
         }
     }
 
-
     private void clearUserObjects(INode root) {
         if (null != root) {
             root.getNodeData().setUserObject(null);
@@ -3756,73 +4254,54 @@ public class SMatchGUI extends Observable implements Observer {
         }
     }
 
-    private void createMatchManager() {
-        String configFile = new File(GUI_CONF_FILE).getParent() + File.separator + cmConfigs.getSelectedItem();
-        log.info("Creating MatchManager with config: " + configFile);
-        updateMatchManagerConfig(configFile);
-        setChanged();
-        notifyObservers();
-    }
-
     private void updateMatchManagerConfig(final String newConfig) {
-        SwingWorker worker = new SwingWorker<String, Void>() {
-            private IMatchManager copy;
+        cbConfig.setEnabled(false);
+        log.info("Loading MatchManager with config: " + newConfig);
+        SwingWorker<IMatchManager, Void> managerUpdateTask = new SwingWorker<IMatchManager, Void>() {
+            private final IMatchManager copy = getMatchManager();
 
             @Override
-            public String doInBackground() {
-                String result = null;
-                try {
-                    copy = MatchManager.getInstanceFromConfigFile(newConfig);
-                } catch (Throwable e) {
-                    if (log.isEnabledFor(Level.ERROR)) {
-                        log.error("Error loading configuration from " + configFileName, e);
-                    }
-                    copy = null;
-                    Throwable rootCause = null;
-                    Throwable cause = e.getCause();
-                    while (cause != null && cause != rootCause) {
-                        rootCause = cause;
-                        cause = cause.getCause();
-                    }
-                    e = rootCause;
-                    result = "Error occurred while loading the configuration from " + configFileName + ".\n\n"
-                            + e.getClass().getSimpleName() + ": " + e.getMessage() + "\n\nPlease, ensure the configuration file is correct and try again.";
-                }
-                return result;
+            public IMatchManager doInBackground() throws InterruptedException {
+                semManager.acquire(PERMITS);
+                return MatchManager.getInstanceFromConfigFile(newConfig);
             }
 
             @Override
             public void done() {
                 try {
-                    String result = get();
-                    if (null != result) {
-                        JOptionPane.showMessageDialog(frame, result, "Configuration load error", JOptionPane.ERROR_MESSAGE);
+                    setMatchManager(get());
+                    cbConfigPrevIndex = cbConfig.getSelectedIndex();
+                } catch (InterruptedException | ExecutionException e) {
+                    // rollback the manager
+                    setMatchManager(copy);
+                    // rollback config index
+                    cbConfig.removeItemListener(configComboListener);
+                    cbConfig.setSelectedIndex(cbConfigPrevIndex);
+                    cbConfig.addItemListener(configComboListener);
+
+                    // show the error message
+                    Throwable cause = e;
+                    while (null != cause.getCause()) {
+                        cause = cause.getCause();
                     }
-                } catch (InterruptedException ignore) {
-                } catch (java.util.concurrent.ExecutionException e) {
-                    String why;
-                    Throwable cause = e.getCause();
-                    while (null != cause && null != cause.getCause()) {
-                        cause = e.getCause();
-                    }
-                    if (cause != null) {
-                        why = cause.getMessage();
-                    } else {
-                        why = e.getMessage();
-                    }
-                    log.error("Error loading configuration: " + why);
+                    log.error("Error loading configuration", cause);
+                    String why = "Error occurred while loading the configuration from " + configFileName + ".\n\n"
+                            + cause.getClass().getSimpleName() + ": " + cause.getMessage()
+                            + "\n\nPlease, ensure the configuration file is correct and try again.";
+                    JOptionPane.showMessageDialog(frame, why, "Configuration load error", JOptionPane.ERROR_MESSAGE);
                 } finally {
-                    mm = copy;
+                    semManager.release(PERMITS);
+                    cbConfig.setEnabled(true);
                     setChanged();
                     notifyObservers();
                 }
             }
         };
         // switches off all mm dependent methods
-        mm = null;
+        setMatchManager(null);
         setChanged();
         notifyObservers();
-        worker.execute();
+        managerUpdateTask.execute();
     }
 
     private void applyLookAndFeel() {
@@ -3872,27 +4351,30 @@ public class SMatchGUI extends Observable implements Observer {
         }
     }
 
+    public IMatchManager getMatchManager() {
+        return mm;
+    }
+
+    public void setMatchManager(IMatchManager mm) {
+        this.mm = mm;
+    }
+
     public void startup(String[] args) throws IOException {
         // initialize property file
         configFileName = ".." + File.separator + "conf" + File.separator + "s-match.xml";
-        ArrayList<String> cleanArgs = new ArrayList<>();
         for (String arg : args) {
             if (arg.startsWith(CLI.CONFIG_FILE_CMD_LINE_KEY)) {
                 configFileName = arg.substring(CLI.CONFIG_FILE_CMD_LINE_KEY.length());
-            } else {
-                cleanArgs.add(arg);
             }
         }
-
-        args = cleanArgs.toArray(new String[cleanArgs.size()]);
 
         showLFIs();
         readProperties();
         applyLookAndFeel();
         buildStaticGUI();
-        createMatchManager();
+        updateMatchManagerConfig(new File(GUI_CONF_FILE).getParent() + File.separator + cmConfigs.getSelectedItem());
 
-        frame = new JFrame("SMatch GUI");
+        frame = new JFrame("S-Match GUI");
         frame.setMinimumSize(new Dimension(600, 400));
         frame.setLocation(100, 100);
         frame.setContentPane(mainPanel);
@@ -3927,17 +4409,6 @@ public class SMatchGUI extends Observable implements Observer {
             log.error("Error while loading icon from " + MAIN_ICON_FILE + ": " + e.getMessage());
         }
 
-        //load the contexts and the mapping from the command line
-        if (0 < args.length) {
-            openSource(new File(args[0]));
-            if (1 < args.length) {
-                openTarget(new File(args[1]));
-                if (2 < args.length) {
-                    openMapping(new File(args[2]));
-                }
-            }
-        }
-
         setChanged();
         notifyObservers();
         frame.setVisible(true);
@@ -3961,11 +4432,18 @@ public class SMatchGUI extends Observable implements Observer {
         }
     };
 
+    @Override
+    public void execute(Runnable command) {
+        SwingUtilities.invokeLater(command);
+    }
+
     public static void main(final String[] args) throws IOException {
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
                 try {
                     SMatchGUI gui = new SMatchGUI();
+                    // route events to Swing
+                    AsyncMatchManager.setEventExecutor(gui);
                     gui.startup(args);
                 } catch (IOException e) {
                     log.error(e.getMessage(), e);

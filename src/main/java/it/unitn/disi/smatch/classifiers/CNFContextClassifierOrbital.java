@@ -1,5 +1,6 @@
 package it.unitn.disi.smatch.classifiers;
 
+import it.unitn.disi.smatch.async.AsyncTask;
 import it.unitn.disi.smatch.data.trees.IContext;
 import it.unitn.disi.smatch.data.trees.INode;
 import it.unitn.disi.smatch.data.trees.INodeData;
@@ -15,14 +16,21 @@ import org.slf4j.LoggerFactory;
  *
  * @author <a rel="author" href="http://autayeu.com/">Aliaksandr Autayeu</a>
  */
-public class CNFContextClassifierOrbital implements IContextClassifier {
+public class CNFContextClassifierOrbital extends CNFContextClassifier implements IAsyncContextClassifier {
 
     private static final Logger log = LoggerFactory.getLogger(CNFContextClassifierOrbital.class);
 
-    public void buildCNodeFormulas(IContext context) throws ContextClassifierException {
-        for (INode node : context.getNodesList()) {
-            buildCNode(node);
-        }
+    public CNFContextClassifierOrbital() {
+        super();
+    }
+
+    public CNFContextClassifierOrbital(IContext context) {
+        super(context);
+    }
+
+    @Override
+    public AsyncTask<Void, INode> asyncClassify(IContext context) {
+        return new CNFContextClassifierOrbital(context);
     }
 
     /**

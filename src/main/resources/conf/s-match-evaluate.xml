@@ -41,7 +41,7 @@
     <bean id="mappingFilter" class="it.unitn.disi.smatch.filters.PR">
         <constructor-arg name="mappingFactory" ref="mappingFactory"/>
         <constructor-arg name="mappingLoader" ref="mappingLoader"/>
-        <constructor-arg name="mappingLocation" value="path-to-golden-positive;path-to-golden-negative"/>
+        <constructor-arg name="mappingLocations" value="path-to-golden-positive;path-to-golden-negative"/>
     </bean>
 
 </beans>

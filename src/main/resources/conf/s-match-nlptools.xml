@@ -18,7 +18,6 @@
     <bean id="contextPreprocessor" class="it.unitn.disi.smatch.preprocessors.NLPToolsContextPreprocessor">
         <constructor-arg name="pipeline" ref="pipeline"/>
         <constructor-arg name="dcp" ref="defaultContextPreprocessor"/>
-        <constructor-arg name="debugLabels" value="false"/>
     </bean>
 
     <bean id="pipeline" class="it.unitn.disi.nlptools.pipelines.LabelPipeline">

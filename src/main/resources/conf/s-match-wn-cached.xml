@@ -31,7 +31,6 @@
     <bean id="elementMatcher" class="it.unitn.disi.smatch.matchers.element.ElementMatcher">
         <constructor-arg name="mappingFactory" ref="mappingFactory"/>
         <constructor-arg name="senseMatcher" ref="binarySenseMatcher"/>
-        <constructor-arg name="linguisticOracle" ref="linguisticOracle"/>
         <constructor-arg name="useWeakSemanticsElementLevelMatchersLibrary" value="true"/>
         <constructor-arg name="stringMatchers">
             <util:list>
