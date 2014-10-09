@@ -657,7 +657,7 @@ public class SMatchGUI extends Observable implements Observer, Executor {
                 uncoalesce(parent);
             }
             @SuppressWarnings("unchecked")
-            List<DefaultMutableTreeNode> linkNodes = (List<DefaultMutableTreeNode>) parent.getNodeData().getUserObject();
+            List<DefaultMutableTreeNode> linkNodes = (List<DefaultMutableTreeNode>) parent.nodeData().getUserObject();
             if (null == linkNodes) {
                 linkNodes = updateUserObject(parent);
             }
@@ -688,7 +688,7 @@ public class SMatchGUI extends Observable implements Observer, Executor {
 
         @Override
         public Object getRoot() {
-            if (null != root && null == root.getNodeData().getUserObject()) {
+            if (null != root && null == root.nodeData().getUserObject()) {
                 updateUserObject(root);
             }
 
@@ -710,7 +710,7 @@ public class SMatchGUI extends Observable implements Observer, Executor {
                     result.add(new DefaultMutableTreeNode(me));
                 }
             }
-            node.getNodeData().setUserObject(result);
+            node.nodeData().setUserObject(result);
             return result;
         }
 
@@ -725,7 +725,7 @@ public class SMatchGUI extends Observable implements Observer, Executor {
                         result = parentNode.getChildAt(index);
                     } else {
                         @SuppressWarnings("unchecked")
-                        List<DefaultMutableTreeNode> linkNodes = (List<DefaultMutableTreeNode>) parentNode.getNodeData().getUserObject();
+                        List<DefaultMutableTreeNode> linkNodes = (List<DefaultMutableTreeNode>) parentNode.nodeData().getUserObject();
                         if (null == linkNodes) {
                             linkNodes = updateUserObject(parentNode);
                         }
@@ -735,7 +735,7 @@ public class SMatchGUI extends Observable implements Observer, Executor {
                     }
                 } else {
                     @SuppressWarnings("unchecked")
-                    List<DefaultMutableTreeNode> linkNodes = (List<DefaultMutableTreeNode>) parentNode.getNodeData().getUserObject();
+                    List<DefaultMutableTreeNode> linkNodes = (List<DefaultMutableTreeNode>) parentNode.nodeData().getUserObject();
                     if (null == linkNodes) {
                         linkNodes = updateUserObject(parentNode);
                     }
@@ -773,7 +773,7 @@ public class SMatchGUI extends Observable implements Observer, Executor {
             if (parent instanceof INode) {
                 INode parentNode = (INode) parent;
                 @SuppressWarnings("unchecked")
-                List<DefaultMutableTreeNode> linkNodes = (List<DefaultMutableTreeNode>) parentNode.getNodeData().getUserObject();
+                List<DefaultMutableTreeNode> linkNodes = (List<DefaultMutableTreeNode>) parentNode.nodeData().getUserObject();
                 if (null == linkNodes) {
                     linkNodes = updateUserObject(parentNode);
                 }
@@ -794,7 +794,7 @@ public class SMatchGUI extends Observable implements Observer, Executor {
             if (node instanceof INode) {
                 INode iNode = (INode) node;
                 @SuppressWarnings("unchecked")
-                List<DefaultMutableTreeNode> linkNodes = (List<DefaultMutableTreeNode>) iNode.getNodeData().getUserObject();
+                List<DefaultMutableTreeNode> linkNodes = (List<DefaultMutableTreeNode>) iNode.nodeData().getUserObject();
                 if (null == linkNodes) {
                     linkNodes = updateUserObject(iNode);
                 }
@@ -811,9 +811,9 @@ public class SMatchGUI extends Observable implements Observer, Executor {
                 INode node = (INode) o;
                 if (newValue instanceof String) {
                     String text = (String) newValue;
-                    if (!node.getNodeData().getName().equals(text)) {
-                        node.getNodeData().setName(text);
-                        node.getNodeData().setIsPreprocessed(false);
+                    if (!node.nodeData().getName().equals(text)) {
+                        node.nodeData().setName(text);
+                        node.nodeData().setIsPreprocessed(false);
                         if (isSource) {
                             sourceModified = true;
                         } else {
@@ -870,7 +870,7 @@ public class SMatchGUI extends Observable implements Observer, Executor {
                             if (child instanceof DefaultMutableTreeNode) {
                                 DefaultMutableTreeNode dmtn = (DefaultMutableTreeNode) child;
                                 @SuppressWarnings("unchecked")
-                                List<DefaultMutableTreeNode> linkNodes = (List<DefaultMutableTreeNode>) pNode.getNodeData().getUserObject();
+                                List<DefaultMutableTreeNode> linkNodes = (List<DefaultMutableTreeNode>) pNode.nodeData().getUserObject();
                                 if (null == linkNodes) {
                                     linkNodes = updateUserObject(pNode);
                                 }
@@ -897,7 +897,7 @@ public class SMatchGUI extends Observable implements Observer, Executor {
                                     result = c.range.x;
                                 } else {
                                     @SuppressWarnings("unchecked")
-                                    List<DefaultMutableTreeNode> linkNodes = (List<DefaultMutableTreeNode>) pNode.getNodeData().getUserObject();
+                                    List<DefaultMutableTreeNode> linkNodes = (List<DefaultMutableTreeNode>) pNode.nodeData().getUserObject();
                                     if (null == linkNodes) {
                                         linkNodes = updateUserObject(pNode);
                                     }
@@ -946,7 +946,9 @@ public class SMatchGUI extends Observable implements Observer, Executor {
             order = new HashMap<>(mapping.size());
             backOrder = new HashMap<>(mapping.size());
             int i = 0;
-            for (INode source : mapping.getSourceContext().getNodesList()) {
+            Iterator<INode> iterator = mapping.getSourceContext().nodeIterator();
+            while (iterator.hasNext()) {
+                INode source = iterator.next();
                 for (IMappingElement<INode> e : mapping.getSources(source)) {
                     order.put(i, e);
                     backOrder.put(e, i);
@@ -1708,13 +1710,13 @@ public class SMatchGUI extends Observable implements Observer, Executor {
                 TreePath sourcePath = createPathToRoot(sourceNode);
                 TreePath targetPath = createPathToRoot(targetNode);
 
-                if (sourceNode.getNodeData().getUserObject() instanceof List
-                        && targetNode.getNodeData().getUserObject() instanceof List) {
+                if (sourceNode.nodeData().getUserObject() instanceof List
+                        && targetNode.nodeData().getUserObject() instanceof List) {
 
                     @SuppressWarnings("unchecked")
-                    List<DefaultMutableTreeNode> sourceLinkNodes = (List<DefaultMutableTreeNode>) sourceNode.getNodeData().getUserObject();
+                    List<DefaultMutableTreeNode> sourceLinkNodes = (List<DefaultMutableTreeNode>) sourceNode.nodeData().getUserObject();
                     @SuppressWarnings("unchecked")
-                    List<DefaultMutableTreeNode> targetLinkNodes = (List<DefaultMutableTreeNode>) targetNode.getNodeData().getUserObject();
+                    List<DefaultMutableTreeNode> targetLinkNodes = (List<DefaultMutableTreeNode>) targetNode.nodeData().getUserObject();
                     DefaultMutableTreeNode sourceLinkNode;
                     DefaultMutableTreeNode targetLinkNode;
 
@@ -1729,13 +1731,13 @@ public class SMatchGUI extends Observable implements Observer, Executor {
                         sourceLinkNode = new DefaultMutableTreeNode(me);
                         if (0 == sourceLinkNodes.size()) {
                             sourceLinkNodes = new ArrayList<>();
-                            sourceNode.getNodeData().setUserObject(sourceLinkNodes);
+                            sourceNode.nodeData().setUserObject(sourceLinkNodes);
                         }
                         sourceLinkNodes.add(sourceLinkNode);
                         targetLinkNode = new DefaultMutableTreeNode(me);
                         if (0 == targetLinkNodes.size()) {
                             targetLinkNodes = new ArrayList<>();
-                            targetNode.getNodeData().setUserObject(targetLinkNodes);
+                            targetNode.nodeData().setUserObject(targetLinkNodes);
                         }
                         targetLinkNodes.add(targetLinkNode);
 
@@ -2188,7 +2190,7 @@ public class SMatchGUI extends Observable implements Observer, Executor {
                     //find the link node
                     DefaultMutableTreeNode linkNode = null;
                     @SuppressWarnings("unchecked")
-                    List<DefaultMutableTreeNode> linkNodes = (List<DefaultMutableTreeNode>) me.getSource().getNodeData().getUserObject();
+                    List<DefaultMutableTreeNode> linkNodes = (List<DefaultMutableTreeNode>) me.getSource().nodeData().getUserObject();
                     MappingTreeModel matm = (MappingTreeModel) tSource.getModel();
                     if (null == linkNodes) {
                         linkNodes = matm.updateUserObject(me.getSource());
@@ -2213,7 +2215,7 @@ public class SMatchGUI extends Observable implements Observer, Executor {
                             // first try collapsing all the nodes above the target one
                             INode curNode = me.getSource();
                             while (null != curNode) {
-                                for (INode child : curNode.getChildrenList()) {
+                                for (INode child : curNode.getChildren()) {
                                     if (!ppList.contains(child) && !matm.isCoalesced(child)) {
                                         tSource.collapsePath(createPathToRoot(child));
                                     }
@@ -2312,7 +2314,7 @@ public class SMatchGUI extends Observable implements Observer, Executor {
                         // first try collapsing all the nodes above the target one
                         INode curNode = target.getParent();
                         while (null != curNode) {
-                            for (INode child : curNode.getChildrenList()) {
+                            for (INode child : curNode.getChildren()) {
                                 if (!ppList.contains(child) && !mtm.isCoalesced(child)) {
                                     tTarget.collapsePath(createPathToRoot(child));
                                 }
@@ -2431,7 +2433,7 @@ public class SMatchGUI extends Observable implements Observer, Executor {
                             relation = getRelation(me);
                         }
                         if (tree == tSource) {
-                            setText(me.getTarget().getNodeData().getName());
+                            setText(me.getTarget().nodeData().getName());
                             //TODO links with the same named target in different contexts - add tooltips
                             switch (relation) {
                                 case IMappingElement.LESS_GENERAL: {
@@ -2444,7 +2446,7 @@ public class SMatchGUI extends Observable implements Observer, Executor {
                                 }
                             }
                         } else {
-                            setText(me.getSource().getNodeData().getName());
+                            setText(me.getSource().nodeData().getName());
                             //TODO links with the same named target in different contexts - add tooltips
                             switch (relation) {
                                 case IMappingElement.LESS_GENERAL: {
@@ -2473,7 +2475,7 @@ public class SMatchGUI extends Observable implements Observer, Executor {
                         setIcon(iconUncoalesceSmall);
                         StringBuilder tip = new StringBuilder();
                         @SuppressWarnings("unchecked")
-                        List<DefaultMutableTreeNode> linkNodes = (List<DefaultMutableTreeNode>) c.parent.getNodeData().getUserObject();
+                        List<DefaultMutableTreeNode> linkNodes = (List<DefaultMutableTreeNode>) c.parent.nodeData().getUserObject();
                         if (null == linkNodes) {
                             if (tree.getModel() instanceof MappingTreeModel) {
                                 linkNodes = ((MappingTreeModel) tree.getModel()).updateUserObject(c.parent);
@@ -2481,7 +2483,7 @@ public class SMatchGUI extends Observable implements Observer, Executor {
                         }
                         for (int i = c.range.x; i <= c.range.y; i++) {
                             if (i < c.parent.getChildCount()) {
-                                tip.append(c.parent.getChildAt(i).getNodeData().getName());
+                                tip.append(c.parent.getChildAt(i).nodeData().getName());
                                 if (i < c.range.y) {
                                     tip.append(", ");
                                 }
@@ -2492,9 +2494,9 @@ public class SMatchGUI extends Observable implements Observer, Executor {
                                         IMappingElement<INode> me = (IMappingElement<INode>) linkNodes.get(i - c.parent.getChildCount()).getUserObject();
                                         tip.append("->");
                                         if (tree == tSource) {
-                                            tip.append(me.getTarget().getNodeData().getName());
+                                            tip.append(me.getTarget().nodeData().getName());
                                         } else {
-                                            tip.append(me.getSource().getNodeData().getName());
+                                            tip.append(me.getSource().nodeData().getName());
                                         }
 
                                         if (i < c.range.y) {
@@ -2567,12 +2569,12 @@ public class SMatchGUI extends Observable implements Observer, Executor {
                 IMappingElement<INode> me = (IMappingElement<INode>) value;
                 switch (column) {
                     case MappingTableModel.C_SOURCE: {
-                        setText(me.getSource().getNodeData().getName());
+                        setText(me.getSource().nodeData().getName());
                         setToolTipText(getStringPathToRoot(me.getSource()));
                         break;
                     }
                     case MappingTableModel.C_TARGET: {
-                        setText(me.getTarget().getNodeData().getName());
+                        setText(me.getTarget().nodeData().getName());
                         setToolTipText(getStringPathToRoot(me.getTarget()));
                         break;
                     }
@@ -2615,9 +2617,9 @@ public class SMatchGUI extends Observable implements Observer, Executor {
         for (int i = 0; i < path.getPathCount(); i++) {
             INode node = (INode) path.getPathComponent(i);
             if (0 == i) {
-                result.append(node.getNodeData().getName());
+                result.append(node.nodeData().getName());
             } else {
-                result.append("\\").append(node.getNodeData().getName());
+                result.append("\\").append(node.nodeData().getName());
             }
         }
         return result.toString();
@@ -2871,7 +2873,7 @@ public class SMatchGUI extends Observable implements Observer, Executor {
                 DefaultTreeModel dtm = (DefaultTreeModel) m;
                 int nodeIdx = parent.getChildIndex(node);
                 INode child = parent.createChild();
-                child.getNodeData().setName("New Node");
+                child.nodeData().setName("New Node");
                 parent.removeChild(child);
                 parent.addChild(nodeIdx, child);
                 dtm.nodesWereInserted(parent, new int[]{dtm.getIndexOfChild(parent, child)});
@@ -2889,7 +2891,7 @@ public class SMatchGUI extends Observable implements Observer, Executor {
         if (o instanceof INode) {
             INode node = (INode) o;
             INode child = node.createChild();
-            child.getNodeData().setName("New Node");
+            child.nodeData().setName("New Node");
             TreeModel m = tree.getModel();
             if (m instanceof DefaultTreeModel) {
                 DefaultTreeModel dtm = (DefaultTreeModel) m;
@@ -2911,8 +2913,9 @@ public class SMatchGUI extends Observable implements Observer, Executor {
             INode node = (INode) o;
             // remove all links from this node and any node below it
             removeLinks(tree, node);
-            for (INode child : node.getDescendantsList()) {
-                removeLinks(tree, child);
+            Iterator<INode> i = node.descendantsIterator();
+            while (i.hasNext()) {
+                removeLinks(tree, i.next());
             }
 
             INode parent = node.getParent();
@@ -2936,9 +2939,9 @@ public class SMatchGUI extends Observable implements Observer, Executor {
                 if (null != parentPath && parentPath.getLastPathComponent() instanceof INode) {
                     // remove from own tree
                     INode parent = (INode) parentPath.getLastPathComponent();
-                    if (parent.getNodeData().getUserObject() instanceof List) {
+                    if (parent.nodeData().getUserObject() instanceof List) {
                         @SuppressWarnings("unchecked")
-                        List<DefaultMutableTreeNode> linkNodes = (List<DefaultMutableTreeNode>) parent.getNodeData().getUserObject();
+                        List<DefaultMutableTreeNode> linkNodes = (List<DefaultMutableTreeNode>) parent.nodeData().getUserObject();
                         TreeModel m = tree.getModel();
                         if (m instanceof DefaultTreeModel) {
                             DefaultTreeModel dtm = (DefaultTreeModel) m;
@@ -3056,9 +3059,9 @@ public class SMatchGUI extends Observable implements Observer, Executor {
     private void removeLinkFromTargetTree(final JTree tree, final IMappingElement<INode> me) {
         JTree oppositeTree = getOppositeTree(tree);
         INode targetNode = getTargetNode(tree, me);
-        if (targetNode.getNodeData().getUserObject() instanceof List) {
+        if (targetNode.nodeData().getUserObject() instanceof List) {
             @SuppressWarnings("unchecked")
-            List<DefaultMutableTreeNode> targetLinkNodes = (List<DefaultMutableTreeNode>) targetNode.getNodeData().getUserObject();
+            List<DefaultMutableTreeNode> targetLinkNodes = (List<DefaultMutableTreeNode>) targetNode.nodeData().getUserObject();
             DefaultMutableTreeNode targetLinkNodeToDelete = null;
             for (DefaultMutableTreeNode targetLinkNode : targetLinkNodes) {
                 // if this is the same link we're deleting in the source, delete it from the target too
@@ -3450,12 +3453,12 @@ public class SMatchGUI extends Observable implements Observer, Executor {
     private SwingWorker<IContextMapping<INode>, IMappingElement<INode>> createMatchTask() {
         final SwingWorker<Void, Void> sourcePreprocess;
         final SwingWorker<Void, Void> targetPreprocess;
-        if (!source.getRoot().getNodeData().isSubtreePreprocessed()) {
+        if (!source.getRoot().nodeData().isSubtreePreprocessed()) {
             sourcePreprocess = createContextOfflineTask(source, semSource, pbSourceProgress, true);
         } else {
             sourcePreprocess = null;
         }
-        if (!target.getRoot().getNodeData().isSubtreePreprocessed()) {
+        if (!target.getRoot().nodeData().isSubtreePreprocessed()) {
             targetPreprocess = createContextOfflineTask(target, semTarget, pbTargetProgress, false);
         } else {
             targetPreprocess = null;
@@ -4218,7 +4221,7 @@ public class SMatchGUI extends Observable implements Observer, Executor {
             jTree.setModel(treeModel);
 
             //expand all the nodes initially
-            if (context.getNodesList().size() < 60) {
+            if (context.nodesCount() < 60) {
                 for (int i = 0; i < jTree.getRowCount(); i++) {
                     jTree.expandRow(i);
                 }
@@ -4247,9 +4250,10 @@ public class SMatchGUI extends Observable implements Observer, Executor {
 
     private void clearUserObjects(INode root) {
         if (null != root) {
-            root.getNodeData().setUserObject(null);
-            for (INode node : root.getDescendantsList()) {
-                node.getNodeData().setUserObject(null);
+            root.nodeData().setUserObject(null);
+            Iterator<INode> i = root.descendantsIterator();
+            while (i.hasNext()) {
+                i.next().nodeData().setUserObject(null);
             }
         }
     }

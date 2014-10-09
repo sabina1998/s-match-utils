@@ -41,8 +41,8 @@ public class CNFContextClassifierOrbital extends CNFContextClassifier implements
      */
     protected void buildCNode(INode in) throws ContextClassifierException {
         StringBuilder path = new StringBuilder();
-        INodeData nd = in.getNodeData();
-        String formula = toCNF(in, nd.getcLabFormula());
+        INodeData nd = in.nodeData();
+        String formula = toCNF(in, nd.getLabelFormula());
         if (formula != null && !formula.isEmpty() && !formula.equals(" ")) {
             if (formula.contains(" ")) {
                 formula = "(" + formula + ")";
@@ -50,7 +50,7 @@ public class CNFContextClassifierOrbital extends CNFContextClassifier implements
             path.append(formula);
         }
         if (in.hasParent()) {
-            formula = in.getParent().getNodeData().getcNodeFormula();
+            formula = in.getParent().nodeData().getNodeFormula();
             if (formula != null && !formula.isEmpty() && !formula.equals(" ")) {
                 if (2 < path.length()) {
                     path.append(" & ").append(formula);
@@ -60,7 +60,7 @@ public class CNFContextClassifierOrbital extends CNFContextClassifier implements
             }
         }
 
-        nd.setcNodeFormula(path.toString());
+        nd.setNodeFormula(path.toString());
     }
 
     /**
@@ -90,7 +90,7 @@ public class CNFContextClassifierOrbital extends CNFContextClassifier implements
             } catch (ParseException e) {
                 final String errMessage = "Logic parse exception: " + e.getClass().getSimpleName() + ": " + e.getMessage();
                 if (log.isErrorEnabled()) {
-                    log.error("Logic parse exception for: " + formula + " at node: " + in.getNodeData().getName());
+                    log.error("Logic parse exception for: " + formula + " at node: " + in.nodeData().getName());
                     log.error(errMessage, e);
                 }
                 throw new ContextClassifierException(errMessage, e);

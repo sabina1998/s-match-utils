@@ -125,7 +125,7 @@ public class SKOSContextLoader extends BaseContextLoader<IContext, INode> implem
                 }
 
                 INode node = result.createNode(nodeName);
-                node.getNodeData().setProvenance(concept.getIRI().toString());
+                node.nodeData().setProvenance(concept.getIRI().toString());
                 node.setUserObject(concept);
                 conceptNode.put(concept.getIRI().toString(), node);
             }
@@ -148,7 +148,7 @@ public class SKOSContextLoader extends BaseContextLoader<IContext, INode> implem
                 String conceptIRI = e.getKey();
                 INode child = e.getValue();
                 if (log.isDebugEnabled()) {
-                    log.debug("Creating hierarchy: " + child.getNodeData().getName() + ": " + conceptIRI);
+                    log.debug("Creating hierarchy: " + child.nodeData().getName() + ": " + conceptIRI);
                 }
 
                 Set<SKOSConcept> parents = reasoner.getSKOSBroaderConcepts(dataSet.getSKOSEntity(conceptIRI).asSKOSConcept());
@@ -167,7 +167,7 @@ public class SKOSContextLoader extends BaseContextLoader<IContext, INode> implem
                     INode parentNode = conceptNode.get(parentConcept.getIRI().toString());
                     if (log.isDebugEnabled()) {
                         log.debug("Choosing as a parent BT: " + parentConcept.getIRI());
-                        log.debug(child.getNodeData().getName() + " -> BT -> " + parentNode.getNodeData().getName());
+                        log.debug(child.nodeData().getName() + " -> BT -> " + parentNode.nodeData().getName());
                     }
 
                     parentNode.addChild(child);
@@ -189,7 +189,7 @@ public class SKOSContextLoader extends BaseContextLoader<IContext, INode> implem
                 String conceptIRI = e.getKey();
                 INode parent = e.getValue();
                 if (log.isDebugEnabled()) {
-                    log.debug("Creating hierarchy: " + parent.getNodeData().getName() + ": " + conceptIRI);
+                    log.debug("Creating hierarchy: " + parent.nodeData().getName() + ": " + conceptIRI);
                 }
 
                 Set<SKOSConcept> children = reasoner.getSKOSNarrowerConcepts(dataSet.getSKOSEntity(conceptIRI).asSKOSConcept());
@@ -202,13 +202,13 @@ public class SKOSContextLoader extends BaseContextLoader<IContext, INode> implem
                     // discard for now all but one
                     if (child.hasParent()) {
                         if (log.isWarnEnabled()) {
-                            log.warn("Keeping previously set parent: child: " + child.getNodeData().getName() + " -> parent: " + child.getParent().getNodeData().getName());
+                            log.warn("Keeping previously set parent: child: " + child.nodeData().getName() + " -> parent: " + child.getParent().nodeData().getName());
                             log.warn("Multiple BTs are found for the concept: " + conceptIRI);
                         }
                     } else {
                         if (log.isDebugEnabled()) {
                             log.debug("Choosing as a parent BT: " + conceptIRI);
-                            log.debug(parent.getNodeData().getName() + " -> NT -> " + child.getNodeData().getName());
+                            log.debug(parent.nodeData().getName() + " -> NT -> " + child.nodeData().getName());
                         }
 
                         int childIndex = parent.getChildIndex(child);
@@ -217,11 +217,11 @@ public class SKOSContextLoader extends BaseContextLoader<IContext, INode> implem
                                 parent.addChild(child);
                                 linksCreated++;
                             } else {
-                                log.warn("Cycle found: " + parent.getNodeData().getName() + " -> " + child.getNodeData().getName());
+                                log.warn("Cycle found: " + parent.nodeData().getName() + " -> " + child.nodeData().getName());
                             }
                         } else {
                             if (log.isWarnEnabled()) {
-                                log.warn("Child already exist under this parent: " + parent.getNodeData().getName() + " -> child -> " + child.getNodeData().getName());
+                                log.warn("Child already exist under this parent: " + parent.nodeData().getName() + " -> child -> " + child.nodeData().getName());
                                 log.warn("Duplicated NT or label: " + conceptIRI + " -> NT -> " + childConcept.getIRI());
                             }
                         }
@@ -251,7 +251,7 @@ public class SKOSContextLoader extends BaseContextLoader<IContext, INode> implem
                 log.warn("Found root nodes: " + roots.size());
                 if (log.isDebugEnabled()) {
                     for (INode r : roots) {
-                        log.debug("Root: " + r.getNodeData().getName());
+                        log.debug("Root: " + r.nodeData().getName());
                     }
                 }
             }

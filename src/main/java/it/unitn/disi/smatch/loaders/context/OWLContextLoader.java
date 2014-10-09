@@ -127,7 +127,7 @@ public class OWLContextLoader extends BaseContextLoader<IContext, INode> impleme
                 if (!excludeNothing || !NOTHING_CLASS.equals(childClass)) {
                     if (!childClass.equals(clazz)) {
                         INode childNode = c.createNode(labelFor(o, childClass));
-                        childNode.getNodeData().setProvenance(childClass.getIRI().toString());
+                        childNode.nodeData().setProvenance(childClass.getIRI().toString());
                         root.addChild(childNode);
                         buildHierarchy(reasoner, o, c, childNode, childClass);
                     } else {
@@ -175,7 +175,7 @@ public class OWLContextLoader extends BaseContextLoader<IContext, INode> impleme
             for (OWLClass cl : o.getClassesInSignature()) {
                 if (!reasoner.isSatisfiable(cl)) {
                     INode node = result.createNode(labelFor(o, cl));
-                    node.getNodeData().setProvenance(cl.getIRI().toString());
+                    node.nodeData().setProvenance(cl.getIRI().toString());
                     result.getRoot().addChild(node);
                 }
             }

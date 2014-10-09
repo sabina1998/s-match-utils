@@ -160,7 +160,7 @@ public class POSAnnotationTool {
             //add previous one to cache
             ILabel curLabel;
             if (-1 != curIndex) {
-                curLabel = data.get(curIndex).getNodeData().getLabel();
+                curLabel = data.get(curIndex).nodeData().getLabel();
                 if (null != curLabel) {
                     taggedPOS.put(curLabel.getText(), toTabText(curLabel));
                 }
@@ -169,11 +169,11 @@ public class POSAnnotationTool {
             //next
             curIndex++;
 
-            curLabel = data.get(curIndex).getNodeData().getLabel();
+            curLabel = data.get(curIndex).nodeData().getLabel();
             if (null == curLabel) {
                 //create label
-                curLabel = new Label(data.get(curIndex).getNodeData().getName());
-                data.get(curIndex).getNodeData().setLabel(curLabel);
+                curLabel = new Label(data.get(curIndex).nodeData().getName());
+                data.get(curIndex).nodeData().setLabel(curLabel);
 
                 //process label
                 try {
@@ -188,16 +188,16 @@ public class POSAnnotationTool {
             String label = curLabel.getText();
             String tabText = taggedPOS.get(label);
             while (null != tabText && curIndex < (data.size() - 1)) {
-                fromTabText(data.get(curIndex).getNodeData().getLabel(), tabText);
+                fromTabText(data.get(curIndex).nodeData().getLabel(), tabText);
                 log.info("Skipping: " + label);
                 super.actionPerformed(e);
                 curIndex++;
 
-                curLabel = data.get(curIndex).getNodeData().getLabel();
+                curLabel = data.get(curIndex).nodeData().getLabel();
                 if (null == curLabel) {
                     //create label
-                    curLabel = new Label(data.get(curIndex).getNodeData().getName());
-                    data.get(curIndex).getNodeData().setLabel(curLabel);
+                    curLabel = new Label(data.get(curIndex).nodeData().getName());
+                    data.get(curIndex).nodeData().setLabel(curLabel);
                     //process label
                     try {
                         tokenizer.process(curLabel);
@@ -206,7 +206,7 @@ public class POSAnnotationTool {
                         log.error(exc.getMessage(), exc);
                     }
                 }
-                label = data.get(curIndex).getNodeData().getLabel().getText();
+                label = data.get(curIndex).nodeData().getLabel().getText();
                 tabText = taggedPOS.get(label);
             }
 
@@ -274,7 +274,7 @@ public class POSAnnotationTool {
             super.actionPerforming(e);
 
             //set NNP
-            ILabel curLabel = data.get(curIndex).getNodeData().getLabel();
+            ILabel curLabel = data.get(curIndex).nodeData().getLabel();
             if (null != curLabel) {
                 for (IToken token : curLabel.getTokens()) {
                     token.setPOSTag(NLPToolsConstants.PROPER_NOUN_SING);
@@ -301,7 +301,7 @@ public class POSAnnotationTool {
 
         public void actionPerformed(ActionEvent e) {
             //set prev tags
-            copyTags(data.get(curIndex - 1).getNodeData().getLabel(), data.get(curIndex).getNodeData().getLabel());
+            copyTags(data.get(curIndex - 1).nodeData().getLabel(), data.get(curIndex).nodeData().getLabel());
             loadLabelAndPath();
             loadPanel();
         }
@@ -324,11 +324,11 @@ public class POSAnnotationTool {
             setToolTipText("");
             if (value instanceof INLPNode) {
                 INLPNode node = (INLPNode) value;
-                ILabel label = node.getNodeData().getLabel();
+                ILabel label = node.nodeData().getLabel();
                 if (null != label) {
                     String posPattern = getPOSPattern(label);
                     setToolTipText(posPattern);
-                    //String newText = node.getNodeData().getName() + " (" + posPattern + ")";
+                    //String newText = node.nodeData().getName() + " (" + posPattern + ")";
                     //setText(newText);
                 }
             } else if (value instanceof DefaultMutableTreeNode) {
@@ -340,7 +340,7 @@ public class POSAnnotationTool {
                     StringBuilder tip = new StringBuilder();
                     for (int i = c.range.x; i <= c.range.y; i++) {
                         if (i < c.parent.getChildCount()) {
-                            tip.append(c.parent.getChildAt(i).getNodeData().getName());
+                            tip.append(c.parent.getChildAt(i).nodeData().getName());
                             if (i < c.range.y) {
                                 tip.append(", ");
                             }
@@ -398,7 +398,7 @@ public class POSAnnotationTool {
         //update
         if (null != curPhrasePanel) {
             //update token pos
-            updateTokenPOS(curPhrasePanel, data.get(curIndex).getNodeData().getLabel());
+            updateTokenPOS(curPhrasePanel, data.get(curIndex).nodeData().getLabel());
 
             tokensScroll.setViewportView(curPhrasePanel);
             tokensScroll.repaint();
@@ -421,7 +421,7 @@ public class POSAnnotationTool {
     }
 
     private void createCurrentPhrasePanel() {
-        curPhrasePanel = buildPhrasePanel(data.get(curIndex).getNodeData().getLabel());
+        curPhrasePanel = buildPhrasePanel(data.get(curIndex).nodeData().getLabel());
         if ((-1 < curIndex) && (curIndex < phrasePanels.size())) {
             phrasePanels.set(curIndex, curPhrasePanel);
         } else {
@@ -766,7 +766,7 @@ public class POSAnnotationTool {
         if (-1 != curIndex) {
             //label = curDataItem.getLabel();
             path = getPathToRoot(data.get(curIndex));
-            label = data.get(curIndex).getNodeData().getLabel().getText();
+            label = data.get(curIndex).nodeData().getLabel().getText();
         }
 
         lbLabel.setText(label);
@@ -776,10 +776,14 @@ public class POSAnnotationTool {
     }
 
     private String getPathToRoot(INLPNode node) {
+        List<INLPNode> ancestors = new ArrayList<>(node.ancestorCount());
+        Iterator<INLPNode> ancestorsIterator = node.ancestorsIterator();
+        while (ancestorsIterator.hasNext()) {
+            ancestors.add(ancestorsIterator.next());
+        }
         StringBuilder result = new StringBuilder();
-        java.util.List<INLPNode> ancestors = node.getAncestorsList();
         for (int i = ancestors.size() - 1; i >= 0; i--) {
-            result.append(ancestors.get(i).getNodeData().getLabel().getText()).append("/");
+            result.append(ancestors.get(i).nodeData().getLabel().getText()).append("/");
         }
         return result.toString();
     }
@@ -792,9 +796,10 @@ public class POSAnnotationTool {
     }
 
     private void clearUserObjects(INLPNode root) {
-        root.getNodeData().setUserObject(null);
-        for (INLPNode node : root.getDescendantsList()) {
-            node.getNodeData().setUserObject(null);
+        root.nodeData().setUserObject(null);
+        Iterator<INLPNode> i = root.descendantsIterator();
+        while (i.hasNext()) {
+            i.next().nodeData().setUserObject(null);
         }
     }
 
@@ -835,7 +840,7 @@ public class POSAnnotationTool {
                 // first try collapsing all the nodes above the target one
                 IBaseNode<IBaseNode, IBaseNodeData> curNode = target.getParent();
                 while (null != curNode) {
-                    for (IBaseNode child : curNode.getChildrenList()) {
+                    for (IBaseNode child : curNode.getChildren()) {
                         if (!ppList.contains(child) && !mtm.isCoalesced(child)) {
                             tTarget.collapsePath(SMatchGUI.createPathToRoot(child));
                         }
@@ -867,13 +872,16 @@ public class POSAnnotationTool {
 
     private void prepareData() throws ContextLoaderException {
         context = contextLoader.loadContext(inputFileName);
-        data = context.getNodesList();
+        data = new ArrayList<>(context.nodesCount());
+        for (Iterator<INLPNode> i = context.nodeIterator(); i.hasNext(); ) {
+            data.add(i.next());
+        }
 
         progressBar.setMaximum(data.size());
         datasetSizeString = Integer.toString(data.size());
 
         curIndex = -1;
-        while (null != data.get(curIndex + 1).getNodeData().getLabel() && (curIndex < (data.size() - 2))) {
+        while (null != data.get(curIndex + 1).nodeData().getLabel() && (curIndex < (data.size() - 2))) {
             curIndex++;
         }
 
@@ -885,7 +893,7 @@ public class POSAnnotationTool {
         int oldIndex = curIndex;
         while (-1 < curIndex) {
             //put all already tagged labels for future reuse
-            ILabel label = data.get(curIndex).getNodeData().getLabel();
+            ILabel label = data.get(curIndex).nodeData().getLabel();
             taggedPOS.put(label.getText(), toTabText(label));
             curIndex--;
         }
@@ -904,8 +912,8 @@ public class POSAnnotationTool {
 
             Set<String> conflicts = new HashSet<>();
             INLPContext c = contextLoader.loadContext(file);
-            for (Iterator<INLPNode> i = c.getNodes(); i.hasNext(); ) {
-                ILabel label = i.next().getNodeData().getLabel();
+            for (Iterator<INLPNode> i = c.nodeIterator(); i.hasNext(); ) {
+                ILabel label = i.next().nodeData().getLabel();
                 String annotation = toTabText(label);
 
                 if (!conflicts.contains(label.getText())) {
