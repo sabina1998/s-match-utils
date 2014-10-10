@@ -41,7 +41,7 @@
 
     <bean id="mappingFactory" class="it.unitn.disi.smatch.data.mappings.HashMapping"/>
 
-    <bean id="contextPreprocessor" class="it.unitn.disi.smatch.preprocessors.DefaultContextPreprocessor">
+    <bean id="contextPreprocessor" class="it.unitn.disi.smatch.preprocessors.RunnableDefaultContextPreprocessor">
         <constructor-arg name="senseMatcher" ref="senseMatcher"/>
         <constructor-arg name="linguisticOracle" ref="linguisticOracle"/>
     </bean>
