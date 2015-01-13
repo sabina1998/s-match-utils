@@ -4,7 +4,6 @@ import com.ikayzo.swing.icon.IconUtils;
 import com.ikayzo.swing.icon.JIconFile;
 import com.ikayzo.swing.icon.LayeredIcon;
 import com.jgoodies.forms.builder.PanelBuilder;
-import com.jgoodies.forms.debug.FormDebugPanel;
 import com.jgoodies.forms.layout.CellConstraints;
 import com.jgoodies.forms.layout.FormLayout;
 import it.unitn.disi.smatch.*;
@@ -3929,9 +3928,8 @@ public class SMatchGUI extends Observable implements Observer, Executor {
         String layoutRows = "top:d:noGrow,top:4dlu:noGrow,top:d:noGrow,top:4dlu:noGrow,fill:max(d;100px):grow,bottom:2dlu:noGrow,bottom:d:noGrow";
 
         FormLayout layout = new FormLayout(layoutColumns, layoutRows);
-        // TODO remove debug
-        PanelBuilder builder = new PanelBuilder(layout, new FormDebugPanel());
-//        PanelBuilder builder = new PanelBuilder(layout);
+        //PanelBuilder builder = new PanelBuilder(layout, new FormDebugPanel());
+        PanelBuilder builder = new PanelBuilder(layout);
         //builder.setDefaultDialogBorder();
         CellConstraints cc = new CellConstraints();
 
@@ -4015,9 +4013,8 @@ public class SMatchGUI extends Observable implements Observer, Executor {
 
         //build source
         FormLayout pnSourceLayout = new FormLayout("fill:d:grow", "center:d:noGrow,top:4dlu:noGrow,center:d:noGrow,top:4dlu:noGrow,center:d:grow,bottom:2dlu:noGrow,bottom:d:noGrow");
-        // TODO remove debug
-        PanelBuilder pnSourceBuilder = new PanelBuilder(pnSourceLayout, new FormDebugPanel());
-//        PanelBuilder pnSourceBuilder = new PanelBuilder(pnSourceLayout);
+//        PanelBuilder pnSourceBuilder = new PanelBuilder(pnSourceLayout, new FormDebugPanel());
+        PanelBuilder pnSourceBuilder = new PanelBuilder(pnSourceLayout);
         JToolBar tbSource = new JToolBar();
         tbSource.setFloatable(false);
         pnSourceBuilder.add(tbSource, cc.xy(1, 1, CellConstraints.FILL, CellConstraints.DEFAULT));
@@ -4076,9 +4073,8 @@ public class SMatchGUI extends Observable implements Observer, Executor {
 
         //build target
         FormLayout pnTargetLayout = new FormLayout("fill:d:grow", "center:d:noGrow,top:4dlu:noGrow,center:d:noGrow,top:4dlu:noGrow,center:d:grow,bottom:2dlu:noGrow,bottom:d:noGrow");
-        // TODO remove debug
-        PanelBuilder pnTargetBuilder = new PanelBuilder(pnTargetLayout, new FormDebugPanel());
-//        PanelBuilder pnTargetBuilder = new PanelBuilder(pnTargetLayout);
+//        PanelBuilder pnTargetBuilder = new PanelBuilder(pnTargetLayout, new FormDebugPanel());
+        PanelBuilder pnTargetBuilder = new PanelBuilder(pnTargetLayout);
         JToolBar tbTarget = new JToolBar();
         tbTarget.setFloatable(false);
         pnTargetBuilder.add(tbTarget, cc.xy(1, 1, CellConstraints.FILL, CellConstraints.DEFAULT));
