@@ -9,6 +9,7 @@ import it.unitn.disi.smatch.loaders.context.IContextLoader;
 import it.unitn.disi.smatch.oracles.wordnet.InMemoryWordNetBinaryArray;
 import it.unitn.disi.smatch.oracles.wordnet.WordNet;
 import it.unitn.disi.smatch.renderers.context.IContextRenderer;
+import org.apache.log4j.PropertyConfigurator;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -19,6 +20,13 @@ import java.util.ArrayList;
  * @author <a rel="author" href="http://autayeu.com/">Aliaksandr Autayeu</a>
  */
 public class CLI {
+
+    static {
+        String log4jConf = System.getProperty("log4j.configuration");
+        if (null != log4jConf) {
+            PropertyConfigurator.configure(log4jConf);
+        }
+    }
 
     /**
      * Default configuration file name.
