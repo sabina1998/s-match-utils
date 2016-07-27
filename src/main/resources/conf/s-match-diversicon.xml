@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:util="http://www.springframework.org/schema/util"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-4.1.xsd
+       http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util-4.1.xsd
+       http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-4.1.xsd">
+
+<!--
+    Default S-Match configuration file. Also used in S-Match GUI by default.
+-->
+	<import resource="s-match.xml"/>
+
+    <bean id="linguisticOracle" class="it.unitn.disi.smatch.oracles.diversicon.SmdivOracle">        
+       <!-- <constructor-arg name="filepath" value="~/.config/diversicon/cache/div-wn31/0.1.0/div-wn31"/>  -->       
+       <!-- <constructor-arg ref="dbConfig"/>  -->       
+    </bean>
+    <!--   <bean id="dbConfig" class="de.tudarmstadt.ukp.lmf.transform.DBConfig">
+		     <constructor-arg name="url" value="jdbc:h2:file:~/.config/diversicon/cache/div-wn31/0.1.0/div-wn31;ACCESS_MODE_DATA=r"
+		     <constructor-arg name="jdbc_driver_class" value="org.h2.Driver">
+		     <constructor-arg name="db_vendor" value="de.tudarmstadt.ukp.lmf.hibernate.UBYH2Dialect">
+		     <constructor-arg name="user" value="root">
+		 	 <constructor-arg name="password" value="pass">  
+			 <constructor-arg name="showSQL" value="false">
+   		</bean>
+    -->
+    <alias name="linguisticOracle" alias="senseMatcher"/>
+
+</beans>
