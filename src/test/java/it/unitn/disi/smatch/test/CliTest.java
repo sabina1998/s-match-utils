@@ -23,9 +23,9 @@ import it.unitn.disi.smatch.CLI;
  * @author <a rel="author" href="http://davidleoni.it/">David Leoni</a>
  *
  */
-public class TestCLI {
+public class CliTest {
 
-    public static final Logger log = Logger.getLogger(TestCLI.class);
+    public static final Logger log = Logger.getLogger(CliTest.class);
     
     @Rule
     public TemporaryFolder folder = new TemporaryFolder();
