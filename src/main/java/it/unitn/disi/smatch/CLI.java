@@ -39,6 +39,12 @@ public class CLI {
     /**
      * @since 2.0.0
      */
+    public static final String VERBOSE_CMD_LINE_KEY = "-v";
+
+    
+    /**
+     * @since 2.0.0
+     */
     public static final String CMD_ALL_STEPS = "allsteps";
     
     // usage string
@@ -54,7 +60,8 @@ public class CLI {
             "\n" +
             " Options: \n" +
             " -config=file.xml                           read configuration from file.xml instead of default s-match.xml\n" +
-            "                                            use -Dkey=value to supply values to ${key} placeholders in the config file";
+            "                                            use -Dkey=value to supply values to ${key} placeholders in the config file\n" +
+            " -v                                         turn verbose mode on\n";    
 
     /**
      * Provides command line interface to the match manager.
@@ -67,11 +74,16 @@ public class CLI {
     public static void main(String[] args) throws IOException, DISIException, ClassNotFoundException {
         // initialize property file
         String configFileName = null;
+        boolean verbose = false;
+        
         ArrayList<String> cleanArgs = new ArrayList<>();
         for (String arg : args) {
             if (arg.startsWith(CONFIG_FILE_CMD_LINE_KEY)) {
                 configFileName = arg.substring(CONFIG_FILE_CMD_LINE_KEY.length());
                 System.out.println("Using config file: " + configFileName);
+            } else if (arg.startsWith(VERBOSE_CMD_LINE_KEY)) {
+                verbose = true;
+                System.out.println("Verbose mode ON");
             } else {
                 cleanArgs.add(arg);
             }
@@ -197,7 +209,16 @@ public class CLI {
                             mm.offline(ctxSource1);
                             IContext ctxSource2 = (IContext) mm.loadContext(inputFile2);
                             mm.offline(ctxSource2);
-                            IContextMapping<INode> result = mm.online(ctxSource1, ctxSource2); 
+                            IContextMapping<INode> result = mm.online(ctxSource1, ctxSource2);
+                            try {
+                                IContextMapping<INode> mapOutput = mm.filterMapping(result);
+                            } catch (SMatchException ex){
+                                System.out.println("INFO: No filtering was performed (too see why, run with flag " + VERBOSE_CMD_LINE_KEY + ")");
+                                if (verbose){
+                                    System.out.println("Reason:");
+                                    ex.printStackTrace();
+                                }
+                            }
                             mm.renderMapping(result, outputFile);
                         } else {
                             System.out.println("To preprocess a mapping, use context loaders that support IContextLoader ");
