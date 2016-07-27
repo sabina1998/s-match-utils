@@ -64,4 +64,34 @@ public class TestCLI {
         
         assertFalse(output.exists());                
     }
+    
+    /**
+     * @since 2.0.0
+     */
+    @Test
+    public void testNoArgs() throws ClassNotFoundException, IOException, DISIException{
+        
+        CLI.main(new String[]{});
+    }
+    
+    /**
+     * @since 2.0.0
+     */
+    @Test
+    public void testUnrecognizedCommand() throws ClassNotFoundException, IOException, DISIException{
+        
+        CLI.main(new String[]{"666"});
+        
+        CLI.main(new String[]{"666", "999"});
+    }
+    
+    /**
+     * @since 2.0.0
+     */
+    @Test
+    public void testVerbose() throws ClassNotFoundException, IOException, DISIException{
+                
+        CLI.main(new String[]{CLI.VERBOSE_CMD_LINE_KEY});               
+    }
+    
 }
