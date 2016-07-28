@@ -25,6 +25,11 @@
         <url>https://github.com/s-match/s-match-utils/issues</url>
     </issueManagement>
 
+	<properties>    
+             <zipToLocalRepo>false</zipToLocalRepo>
+    </properties>
+
+
     <dependencies>
         <!-- spring -->
         <dependency>
@@ -268,7 +273,7 @@
                         <configuration>
                             <finalName>s-match-${project.version}</finalName>
                             <appendAssemblyId>false</appendAssemblyId>
-                            <attach>false</attach>
+                            <attach>${zipToLocalRepo}</attach>
                             <descriptors>
                                 <descriptor>src/main/assembly/s-match-assembly.xml</descriptor>
                             </descriptors>
