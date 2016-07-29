@@ -25,11 +25,39 @@
         <url>https://github.com/s-match/s-match-utils/issues</url>
     </issueManagement>
 
-	<properties>    
-             <zipToLocalRepo>false</zipToLocalRepo>
-    </properties>
+	
+	<profiles>
+		<profile>
+			<id>makeZip</id>
+			<build>
+			<plugins>			
+				<plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>all</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
 
-
+                        <configuration>
+                            <finalName>s-match-${project.version}</finalName>
+                            <appendAssemblyId>false</appendAssemblyId>
+                            <attach>true</attach>
+                            <descriptors>
+                                <descriptor>src/main/assembly/s-match-assembly.xml</descriptor>
+                            </descriptors>
+                        </configuration>
+                    </execution>
+                </executions>
+	            </plugin>	            
+            </plugins>
+            </build>			
+		</profile>
+	</profiles>
+	
     <dependencies>
         <!-- spring -->
         <dependency>
@@ -264,29 +292,7 @@
                         </configuration>
                     </execution>
                 </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-assembly-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>all</id>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>single</goal>
-                        </goals>
-
-                        <configuration>
-                            <finalName>s-match-${project.version}</finalName>
-                            <appendAssemblyId>false</appendAssemblyId>
-                            <attach>${zipToLocalRepo}</attach>
-                            <descriptors>
-                                <descriptor>src/main/assembly/s-match-assembly.xml</descriptor>
-                            </descriptors>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
+            </plugin>            
         </plugins>
     </build>
 </project>
