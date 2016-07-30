@@ -10,6 +10,8 @@ import it.unitn.disi.smatch.oracles.wordnet.InMemoryWordNetBinaryArray;
 import it.unitn.disi.smatch.oracles.wordnet.WordNet;
 import it.unitn.disi.smatch.renderers.context.IContextRenderer;
 import org.apache.log4j.PropertyConfigurator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -20,6 +22,8 @@ import java.util.ArrayList;
  * @author <a rel="author" href="http://autayeu.com/">Aliaksandr Autayeu</a>
  */
 public class CLI {
+
+    private static final Logger log = LoggerFactory.getLogger(CLI.class);
 
     static {
         String log4jConf = System.getProperty("log4j.configuration");
@@ -65,7 +69,7 @@ public class CLI {
         for (String arg : args) {
             if (arg.startsWith(CONFIG_FILE_CMD_LINE_KEY)) {
                 configFileName = arg.substring(CONFIG_FILE_CMD_LINE_KEY.length());
-                System.out.println("Using config file: " + configFileName);
+                log.info("Using config file: {}", configFileName);
             } else {
                 cleanArgs.add(arg);
             }
@@ -75,7 +79,7 @@ public class CLI {
 
         // check input parameters
         if (args.length < 1) {
-            System.out.println(USAGE);
+            log.info(USAGE);
         } else {
             IMatchManager mm;
 
@@ -94,7 +98,7 @@ public class CLI {
                                 args[9]
                         );
                     } else {
-                        System.out.println("Not enough arguments for wntoflat command.");
+                        log.error("Not enough arguments for wntoflat command.");
                     }
                     break;
                 case "convert":
@@ -117,11 +121,11 @@ public class CLI {
                                 IContextMapping<INode> map = mm.loadMapping(ctxSource, ctxTarget, inputFile);
                                 mm.renderMapping(map, outputFile);
                             } else {
-                                System.out.println("To convert a mapping, use context loaders supporting IContextLoader.");
+                                log.warn("To convert a mapping, use context loaders supporting IContextLoader.");
                             }
                         }
                     } else {
-                        System.out.println("Not enough arguments for convert command.");
+                        log.error("Not enough arguments for convert command.");
                     }
                     break;
                 case "offline":
@@ -134,10 +138,10 @@ public class CLI {
                             mm.offline(ctxSource);
                             mm.renderContext(ctxSource, outputFile);
                         } else {
-                            System.out.println("To preprocess a mapping, use context loaders and renderers support IContextLoader and IContextRenderer.");
+                            log.warn("To preprocess a mapping, use context loaders and renderers support IContextLoader and IContextRenderer.");
                         }
                     } else {
-                        System.out.println("Not enough arguments for offline command.");
+                        log.error("Not enough arguments for offline command.");
                     }
                     break;
                 case "online":
@@ -152,10 +156,10 @@ public class CLI {
                             IContextMapping<INode> result = mm.online(ctxSource, ctxTarget);
                             mm.renderMapping(result, outputFile);
                         } else {
-                            System.out.println("To match contexts, use context loaders supporting IContextLoader.");
+                            log.warn("To match contexts, use context loaders supporting IContextLoader.");
                         }
                     } else {
-                        System.out.println("Not enough arguments for online command.");
+                        log.error("Not enough arguments for online command.");
                     }
                     break;
                 case "filter":
@@ -173,14 +177,14 @@ public class CLI {
                             IContextMapping<INode> mapOutput = mm.filterMapping(mapInput);
                             mm.renderMapping(mapOutput, outputFile);
                         } else {
-                            System.out.println("To filter a mapping, use context loaders supporting IContextLoader.");
+                            log.warn("To filter a mapping, use context loaders supporting IContextLoader.");
                         }
                     } else {
-                        System.out.println("Not enough arguments for mappingFilter command.");
+                        log.error("Not enough arguments for mappingFilter command.");
                     }
                     break;
                 default:
-                    System.out.println("Unrecognized command.");
+                    log.error("Unrecognized command.");
                     break;
             }
         }
@@ -190,7 +194,7 @@ public class CLI {
         IMatchManager mm;
         if (configFileName == null) {
             mm = MatchManager.getInstanceFromResource(DEFAULT_CONFIG_FILE_NAME);
-            System.out.println("Using resource config file: " + DEFAULT_CONFIG_FILE_NAME);
+            log.info("Using resource config file: " + DEFAULT_CONFIG_FILE_NAME);
         } else {
             mm = MatchManager.getInstanceFromConfigFile(configFileName);
         }
