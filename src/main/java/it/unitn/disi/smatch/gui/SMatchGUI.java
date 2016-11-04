@@ -63,6 +63,12 @@ public class SMatchGUI extends Observable implements Observer, Executor {
             PropertyConfigurator.configure(".." + File.separator + "conf" + File.separator + "log4j-gui.properties");
         }
 
+        // c3p0 lib used by hibernate in Diversicon is way too chatty, and I couldn't 
+        // silence it with log4j properties nor it picked the  
+        // file mchange-log.properties I usually put in resources
+        System.setProperty("com.mchange.v2.log.MLog", "com.mchange.v2.log.FallbackMLog");
+        System.setProperty("com.mchange.v2.log.FallbackMLog.DEFAULT_CUTOFF_LEVEL", "OFF"); // Off or any other level
+        
         log = Logger.getLogger(SMatchGUI.class);
     }
 
