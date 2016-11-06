@@ -29,24 +29,24 @@ public class DiversiconTest {
     
     @Test
     public void testSmatchSynchronousDiversiconXml() {
-        runConfig("s-match-synchronous-diversicon.xml");
-        
+        runConfig("s-match-synchronous-diversicon.xml", "cw/c.xml", "cw/w.xml");        
     }
     
     @Test
     public void testSpsmSmatchAsynchronousDiversiconXml() {                
-        runConfig("s-match-spsm-asymmetric-diversicon.xml");
-        
+        runConfig("s-match-spsm-asymmetric-diversicon.xml", "spsm/source.xml", "spsm/target.xml");        
     }
 
     /**
      * Runs xml config found in src/main/resources/conf/ + xmlName
      * 
      * @param xmlName something like "s-match-diversicon.xml"
+     * @param source something like "cw/c.xml"
+     * @param target something like "cw/w.xml"
      * 
      * @since 2.0.0
      */
-    private void runConfig(String xmlName) {
+    private void runConfig(String xmlName, String source, String target ) {
         File output = new File(folder.getRoot(), UUID.randomUUID().toString());                      
         
         
@@ -54,8 +54,8 @@ public class DiversiconTest {
             CLI.main(new String[]{
                     CLI.CMD_ALL_STEPS,
                     CLI.CONFIG_FILE_CMD_LINE_KEY + "src/main/resources/conf/" + xmlName,
-                    "src/main/resources/test-data/cw/c.xml",
-                    "src/main/resources/test-data/cw/w.xml",
+                    "src/main/resources/test-data/" + source,
+                    "src/main/resources/test-data/" + target,
                     output.getAbsolutePath()
                     });            
         } catch (ClassNotFoundException | IOException | DISIException e) {            
