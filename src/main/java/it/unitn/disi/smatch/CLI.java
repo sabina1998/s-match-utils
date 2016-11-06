@@ -33,7 +33,9 @@ public class CLI {
      */
     public static final String DEFAULT_CONFIG_FILE_NAME = "/it/unitn/disi/smatch/s-match.xml";
 
-    // config file command line key
+    /**
+     * Config file command line key
+     */
     public static final String CONFIG_FILE_CMD_LINE_KEY = "-config=";
 
     /**

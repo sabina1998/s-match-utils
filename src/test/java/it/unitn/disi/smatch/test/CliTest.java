@@ -9,6 +9,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.UUID;
 
+import org.apache.commons.io.FileUtils;
 import org.apache.log4j.Logger;
 import org.junit.Rule;
 
@@ -44,8 +45,16 @@ public class CliTest {
                 "src/main/resources/test-data/cw/w.xml",
                 output.getAbsolutePath()
                 });
-        log.debug("Output mapping is " + output.getAbsolutePath());
-        assertTrue(output.exists());                
+
+        log.info("Output mapping location: " + output.getAbsolutePath());
+        assertTrue(output.exists());
+        
+        try {
+            String outputContent = FileUtils.readFileToString(output);
+            log.debug("Output mapping content:\n" + outputContent);
+        } catch (IOException e) {        
+            throw new RuntimeException(e);
+        }
     }
     
     /**
