@@ -3452,16 +3452,6 @@ public class SMatchGUI extends Observable implements Observer, Executor {
     private SwingWorker<IContextMapping<INode>, IMappingElement<INode>> createMatchTask() {
         final SwingWorker<Void, Void> sourcePreprocess;
         final SwingWorker<Void, Void> targetPreprocess;
-        if (!source.getRoot().nodeData().isSubtreePreprocessed()) {
-            sourcePreprocess = createContextOfflineTask(source, semSource, pbSourceProgress, true);
-        } else {
-            sourcePreprocess = null;
-        }
-        if (!target.getRoot().nodeData().isSubtreePreprocessed()) {
-            targetPreprocess = createContextOfflineTask(target, semTarget, pbTargetProgress, false);
-        } else {
-            targetPreprocess = null;
-        }
 
         // prepare the match task
         pbProgress.setIndeterminate(true);
@@ -3473,21 +3463,46 @@ public class SMatchGUI extends Observable implements Observer, Executor {
         } else {
             matchTask = null;
         }
+        
+        if (!source.getRoot().nodeData().isSubtreePreprocessed()) {
+            sourcePreprocess = createContextOfflineTask(source, semSource, pbSourceProgress, true);
+        } else {
+            sourcePreprocess = null;
+        }
+        if (!target.getRoot().nodeData().isSubtreePreprocessed()) {
+            targetPreprocess = createContextOfflineTask(target, semTarget, pbTargetProgress, false);
+        } else {
+            targetPreprocess = null;
+        }
+
         SwingWorker<IContextMapping<INode>, IMappingElement<INode>> task =
                 new SwingWorker<IContextMapping<INode>, IMappingElement<INode>>() {
                     @Override
                     public IContextMapping<INode> doInBackground() throws Exception {
-                        if (null != sourcePreprocess) {
-                            sourcePreprocess.execute();
-                        }
-                        if (null != targetPreprocess) {
-                            targetPreprocess.execute();
-                        }
-                        if (null != sourcePreprocess) {
-                            sourcePreprocess.get();
-                        }
-                        if (null != targetPreprocess) {
-                            targetPreprocess.get();
+                        if (null != matchTask) {
+                            // parallel execution of source and target preprocess
+                            if (null != sourcePreprocess) {
+                                sourcePreprocess.execute();
+                            }
+                            if (null != targetPreprocess) {
+                                targetPreprocess.execute();
+                            }
+                            if (null != sourcePreprocess) {
+                                sourcePreprocess.get();
+                            }
+                            if (null != targetPreprocess) {
+                                targetPreprocess.get();
+                            }
+                        } else {
+                            // serial execution of source and target preprocess
+                            if (null != sourcePreprocess) {
+                                sourcePreprocess.execute();
+                                sourcePreprocess.get();
+                            }
+                            if (null != targetPreprocess) {
+                                targetPreprocess.execute();
+                                targetPreprocess.get();
+                            }
                         }
 
                         semManager.acquire();
