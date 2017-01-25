@@ -40,6 +40,69 @@ public class CLI {
     // config file command line key
     public static final String CONFIG_FILE_CMD_LINE_KEY = "-config=";
 
+    /**
+     * Create cached WordNet files for fast matching:
+     * 
+     * <pre> 
+     * {@code wntoflat <jwnlConfig> <files...>}
+     * </pre>
+     */
+    public static final String CMD_WN_TO_FLAT = "wntoflat";    
+
+    /**
+     * Read input file and write it into output file:
+     * 
+     * <pre>
+     * {@code convert <input> <output>}
+     * </pre>
+     * 
+     * Read source, target and input mapping, and write the output mapping:
+     * 
+     * <pre>
+     * {@code convert <source> <target> <input> <output>}
+     * </pre>
+     */
+    public static final String CMD_CONVERT = "convert";    
+               
+    /**
+     * Read input file, preprocess it and write it into output file:
+     * 
+     * <pre>
+     * {@code offline <input> <output> }
+     * </pre>    
+     */
+    public static final String CMD_OFFLINE = "offline";
+                 
+    /** 
+     * Read source and target files, run matching and write the output file:
+     * 
+     * <pre>
+     * {@code online <source> <target> <output> }
+     * </pre>    
+     */
+    public static final String CMD_ONLINE = "online";
+           
+    /**
+     * Read source and target files, input mapping, run filtering and write the output mapping:
+     * 
+     * <pre>
+     * {@code filter <source> <target> <input> <output>}
+     * </pre>    
+     */
+    public static final String CMD_FILTER = "filter";
+    
+    
+    /** 
+     * Read source and target files, run all steps from 1 to 4 and write the output mapping:
+     * 
+     * <pre>
+     * {@code  allsteps <source> <target> <output>  }
+     * </pre>
+     * 
+     * @since 2.0.0
+     */
+    public static final String CMD_ALL_STEPS = "allsteps";
+    
     // usage string
     private static final String USAGE = "Usage: MatchManager <command> <arguments> [options]\n" +
             " Commands: \n" +
@@ -49,10 +112,11 @@ public class CLI {
             " offline <input> <output>                   read input file, preprocess it and write it into output file\n" +
             " online <source> <target> <output>          read source and target files, run matching and write the output file\n" +
             " filter <source> <target> <input> <output>  read source and target files, input mapping, run filtering and write the output mapping\n" +
+            " allsteps <source> <target> <output>        read source and target files, run all steps from 1 to 4 and write the output mapping\n" +            
             "\n" +
             " Options: \n" +
             " -config=file.xml                           read configuration from file.xml instead of default s-match.xml\n" +
-            "                                            use -Dkey=value to supply values to ${key} placeholders in the config file";
+            "                                            use -Dkey=value to supply values to ${key} placeholders in the config file\n";    
 
     /**
      * Provides command line interface to the match manager.
@@ -65,11 +129,12 @@ public class CLI {
     public static void main(String[] args) throws IOException, DISIException, ClassNotFoundException {
         // initialize property file
         String configFileName = null;
+        
         ArrayList<String> cleanArgs = new ArrayList<>();
         for (String arg : args) {
             if (arg.startsWith(CONFIG_FILE_CMD_LINE_KEY)) {
                 configFileName = arg.substring(CONFIG_FILE_CMD_LINE_KEY.length());
-                log.info("Using config file: {}", configFileName);
+                System.out.println("Using config file: " + configFileName);
             } else {
                 cleanArgs.add(arg);
             }
@@ -84,7 +149,7 @@ public class CLI {
             IMatchManager mm;
 
             switch (args[0]) {
-                case "wntoflat":
+                case CMD_WN_TO_FLAT:
                     if (9 < args.length) {
                         CLI.convertWordNetToFlat(
                                 args[1],
@@ -101,7 +166,7 @@ public class CLI {
                         log.error("Not enough arguments for wntoflat command.");
                     }
                     break;
-                case "convert":
+                case CMD_CONVERT:
                     mm = createMatchManager(configFileName);
                     if (2 < args.length) {
                         if (3 == args.length) {
@@ -128,7 +193,7 @@ public class CLI {
                         log.error("Not enough arguments for convert command.");
                     }
                     break;
-                case "offline":
+                case CMD_OFFLINE:
                     mm = createMatchManager(configFileName);
                     if (2 < args.length) {
                         String inputFile = args[1];
@@ -144,7 +209,7 @@ public class CLI {
                         log.error("Not enough arguments for offline command.");
                     }
                     break;
-                case "online":
+                case CMD_ONLINE:
                     mm = createMatchManager(configFileName);
                     if (3 < args.length) {
                         String sourceFile = args[1];
@@ -162,7 +227,7 @@ public class CLI {
                         log.error("Not enough arguments for online command.");
                     }
                     break;
-                case "filter":
+                case CMD_FILTER:
                     mm = createMatchManager(configFileName);
                     if (4 < args.length) {
                         String sourceFile = args[1];
@@ -180,7 +245,34 @@ public class CLI {
                             log.warn("To filter a mapping, use context loaders supporting IContextLoader.");
                         }
                     } else {
-                        log.error("Not enough arguments for mappingFilter command.");
+                        log.error("Not enough arguments for filter command.");
+                    }
+                    break;
+                case CMD_ALL_STEPS:
+                    mm = createMatchManager(configFileName);
+                    if (3 < args.length) {
+                        String inputFile1 = args[1];
+                        String inputFile2 = args[2];
+                        String outputFile = args[3];
+                        
+                        if (mm.getContextLoader() instanceof IContextLoader) {
+                            IContext ctxSource1 = (IContext) mm.loadContext(inputFile1);
+                            mm.offline(ctxSource1);
+                            IContext ctxSource2 = (IContext) mm.loadContext(inputFile2);
+                            mm.offline(ctxSource2);
+                            IContextMapping<INode> result = mm.online(ctxSource1, ctxSource2);
+                            try {
+                                IContextMapping<INode> mapOutput = mm.filterMapping(result);
+                            } catch (SMatchException ex){
+                                log.info("No filtering was performed (too see why, set logging at DEBUG level)");                                                               
+                                log.debug("Reason:\n", ex);                                
+                            }
+                            mm.renderMapping(result, outputFile);
+                        } else {
+                            log.error("To preprocess a mapping, use context loaders that support IContextLoader");
+                        }
+                    } else {
+                        log.error("Not enough arguments for allsteps command.");
                     }
                     break;
                 default:
