@@ -21,7 +21,6 @@ import it.unitn.disi.smatch.CLI;
 /**
  * @since 2.0.0
  * @author <a rel="author" href="http://davidleoni.it/">David Leoni</a>
- *
  */
 public class CliTest {
 
@@ -84,14 +83,5 @@ public class CliTest {
         
         CLI.main(new String[]{"666", "999"});
     }
-    
-    /**
-     * @since 2.0.0
-     */
-    @Test
-    public void testVerbose() throws ClassNotFoundException, IOException, DISIException{
-                
-        CLI.main(new String[]{CLI.VERBOSE_CMD_LINE_KEY});               
-    }
-    
+        
 }
