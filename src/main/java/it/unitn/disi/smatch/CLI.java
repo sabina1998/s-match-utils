@@ -10,6 +10,8 @@ import it.unitn.disi.smatch.oracles.wordnet.InMemoryWordNetBinaryArray;
 import it.unitn.disi.smatch.oracles.wordnet.WordNet;
 import it.unitn.disi.smatch.renderers.context.IContextRenderer;
 import org.apache.log4j.PropertyConfigurator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -20,6 +22,8 @@ import java.util.ArrayList;
  * @author <a rel="author" href="http://autayeu.com/">Aliaksandr Autayeu</a>
  */
 public class CLI {
+
+    private static final Logger log = LoggerFactory.getLogger(CLI.class);
 
     static {
         String log4jConf = System.getProperty("log4j.configuration");
@@ -38,13 +42,66 @@ public class CLI {
      */
     public static final String CONFIG_FILE_CMD_LINE_KEY = "-config=";
 
-    /**
-     * @since 2.0.0
-     */
-    public static final String VERBOSE_CMD_LINE_KEY = "-v";
-
     
     /**
+     * Create cached WordNet files for fast matching:
+     * 
+     * <pre> 
+     * {@code wntoflat <jwnlConfig> <files...>}
+     * </pre>
+     */
+    public static final String CMD_WN_TO_FLAT = "wntoflat";    
+
+    /**
+     * Read input file and write it into output file:
+     * 
+     * <pre>
+     * {@code convert <input> <output>}
+     * </pre>
+     * 
+     * Read source, target and input mapping, and write the output mapping:
+     * 
+     * <pre>
+     * {@code convert <source> <target> <input> <output>}
+     * </pre>
+     */
+    public static final String CMD_CONVERT = "convert";    
+               
+    /**
+     * Read input file, preprocess it and write it into output file:
+     * 
+     * <pre>
+     * {@code offline <input> <output> }
+     * </pre>    
+     */
+    public static final String CMD_OFFLINE = "offline";
+                 
+    /** 
+     * Read source and target files, run matching and write the output file:
+     * 
+     * <pre>
+     * {@code online <source> <target> <output> }
+     * </pre>    
+     */
+    public static final String CMD_ONLINE = "online";
+           
+    /**
+     * Read source and target files, input mapping, run filtering and write the output mapping:
+     * 
+     * <pre>
+     * {@code filter <source> <target> <input> <output>}
+     * </pre>    
+     */
+    public static final String CMD_FILTER = "filter";
+    
+    
+    /** 
+     * Read source and target files, run all steps from 1 to 4 and write the output mapping:
+     * 
+     * <pre>
+     * {@code  allsteps <source> <target> <output>  }
+     * </pre>
+     * 
      * @since 2.0.0
      */
     public static final String CMD_ALL_STEPS = "allsteps";
@@ -62,8 +119,7 @@ public class CLI {
             "\n" +
             " Options: \n" +
             " -config=file.xml                           read configuration from file.xml instead of default s-match.xml\n" +
-            "                                            use -Dkey=value to supply values to ${key} placeholders in the config file\n" +
-            " -v                                         turn verbose mode on\n";    
+            "                                            use -Dkey=value to supply values to ${key} placeholders in the config file\n";    
 
     /**
      * Provides command line interface to the match manager.
@@ -76,16 +132,12 @@ public class CLI {
     public static void main(String[] args) throws IOException, DISIException, ClassNotFoundException {
         // initialize property file
         String configFileName = null;
-        boolean verbose = false;
         
         ArrayList<String> cleanArgs = new ArrayList<>();
         for (String arg : args) {
             if (arg.startsWith(CONFIG_FILE_CMD_LINE_KEY)) {
                 configFileName = arg.substring(CONFIG_FILE_CMD_LINE_KEY.length());
                 System.out.println("Using config file: " + configFileName);
-            } else if (arg.startsWith(VERBOSE_CMD_LINE_KEY)) {
-                verbose = true;
-                System.out.println("Verbose mode ON");
             } else {
                 cleanArgs.add(arg);
             }
@@ -95,12 +147,12 @@ public class CLI {
 
         // check input parameters
         if (args.length < 1) {
-            System.out.println(USAGE);
+            log.info(USAGE);
         } else {
             IMatchManager mm;
 
             switch (args[0]) {
-                case "wntoflat":
+                case CMD_WN_TO_FLAT:
                     if (9 < args.length) {
                         CLI.convertWordNetToFlat(
                                 args[1],
@@ -114,10 +166,10 @@ public class CLI {
                                 args[9]
                         );
                     } else {
-                        System.out.println("Not enough arguments for wntoflat command.");
+                        log.error("Not enough arguments for wntoflat command.");
                     }
                     break;
-                case "convert":
+                case CMD_CONVERT:
                     mm = createMatchManager(configFileName);
                     if (2 < args.length) {
                         if (3 == args.length) {
@@ -137,14 +189,14 @@ public class CLI {
                                 IContextMapping<INode> map = mm.loadMapping(ctxSource, ctxTarget, inputFile);
                                 mm.renderMapping(map, outputFile);
                             } else {
-                                System.out.println("To convert a mapping, use context loaders supporting IContextLoader.");
+                                log.warn("To convert a mapping, use context loaders supporting IContextLoader.");
                             }
                         }
                     } else {
-                        System.out.println("Not enough arguments for convert command.");
+                        log.error("Not enough arguments for convert command.");
                     }
                     break;
-                case "offline":
+                case CMD_OFFLINE:
                     mm = createMatchManager(configFileName);
                     if (2 < args.length) {
                         String inputFile = args[1];
@@ -154,13 +206,13 @@ public class CLI {
                             mm.offline(ctxSource);
                             mm.renderContext(ctxSource, outputFile);
                         } else {
-                            System.out.println("To preprocess a mapping, use context loaders and renderers support IContextLoader and IContextRenderer.");
+                            log.warn("To preprocess a mapping, use context loaders and renderers support IContextLoader and IContextRenderer.");
                         }
                     } else {
-                        System.out.println("Not enough arguments for offline command.");
+                        log.error("Not enough arguments for offline command.");
                     }
                     break;
-                case "online":
+                case CMD_ONLINE:
                     mm = createMatchManager(configFileName);
                     if (3 < args.length) {
                         String sourceFile = args[1];
@@ -172,13 +224,13 @@ public class CLI {
                             IContextMapping<INode> result = mm.online(ctxSource, ctxTarget);
                             mm.renderMapping(result, outputFile);
                         } else {
-                            System.out.println("To match contexts, use context loaders supporting IContextLoader.");
+                            log.warn("To match contexts, use context loaders supporting IContextLoader.");
                         }
                     } else {
-                        System.out.println("Not enough arguments for online command.");
+                        log.error("Not enough arguments for online command.");
                     }
                     break;
-                case "filter":
+                case CMD_FILTER:
                     mm = createMatchManager(configFileName);
                     if (4 < args.length) {
                         String sourceFile = args[1];
@@ -193,10 +245,10 @@ public class CLI {
                             IContextMapping<INode> mapOutput = mm.filterMapping(mapInput);
                             mm.renderMapping(mapOutput, outputFile);
                         } else {
-                            System.out.println("To filter a mapping, use context loaders supporting IContextLoader.");
+                            log.warn("To filter a mapping, use context loaders supporting IContextLoader.");
                         }
                     } else {
-                        System.out.println("Not enough arguments for mappingFilter command.");
+                        log.error("Not enough arguments for filter command.");
                     }
                     break;
                 case CMD_ALL_STEPS:
@@ -215,22 +267,20 @@ public class CLI {
                             try {
                                 IContextMapping<INode> mapOutput = mm.filterMapping(result);
                             } catch (SMatchException ex){
-                                System.out.println("INFO: No filtering was performed (too see why, run with flag " + VERBOSE_CMD_LINE_KEY + ")");
-                                if (verbose){
-                                    System.out.println("Reason:");
-                                    ex.printStackTrace();
-                                }
+                                log.info("No filtering was performed (too see why, set logging at DEBUG level)");                                                               
+                                log.debug("Reason:\n", ex);                                
                             }
                             mm.renderMapping(result, outputFile);
                         } else {
-                            System.out.println("To preprocess a mapping, use context loaders that support IContextLoader ");
+                            log.error("To preprocess a mapping, use context loaders that support IContextLoader");
                         }
                     } else {
-                        System.out.println("Not enough arguments for allsteps command.");
+                        log.error("Not enough arguments for allsteps command.");
                     }
                     break;
+   
                 default:
-                    System.out.println("Unrecognized command.");
+                    log.error("Unrecognized command.");
                     break;
             }
         }
@@ -240,7 +290,7 @@ public class CLI {
         IMatchManager mm;
         if (configFileName == null) {
             mm = MatchManager.getInstanceFromResource(DEFAULT_CONFIG_FILE_NAME);
-            System.out.println("Using resource config file: " + DEFAULT_CONFIG_FILE_NAME);
+            log.info("Using resource config file: " + DEFAULT_CONFIG_FILE_NAME);
         } else {
             mm = MatchManager.getInstanceFromConfigFile(configFileName);
         }
