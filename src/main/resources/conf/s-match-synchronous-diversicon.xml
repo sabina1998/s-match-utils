@@ -14,22 +14,24 @@
     
 <bean id="linguisticOracle" class="it.unitn.disi.smatch.oracles.diversicon.SmdivOracle">        
 		
-		<!-- By default S-Match downloads an H2 Wordnet 3.1 readonly database in 
+ <!-- 
+  
+  By default S-Match downloads an H2 Wordnet 3.1 readonly database in 
 			 USER_HOME/.config/s-match/diversicon/cache/div-wn31
 		
-			 To point instead S-match to a DB of your choice, you can:
+     To point instead S-match to a DB of your choice, you can:
 		
-		     A) Just provide a filepath to a H2 db by uncommenting the following line
-		        (DON'T end the file name with '.h2.db'! : -->
+        A) Just provide a filepath to a H2 db by uncommenting and editing the following line
+		   (DON'T end the file name with '.h2.db'!  -->
 		     
-       <!-- <constructor-arg name="filepath" value="~/.config/s-match/diversicon/cache/div-wn31/0.1.0/div-wn31"/>  -->       
+        <!-- <constructor-arg name="filepath" value="~/.config/s-match/diversicon/cache/div-wn31/0.1.0/div-wn31"/>  -->       
 
-		<!-- OR
+<!-- OR
 		     
-		     B) for more fine-grained config, you can uncomment the following line and edit the
+        B) for more fine-grained config, you can uncomment the following line and edit the
 		     next beans with id="divConfig" and id="dbConfig": -->
 
-       		<!--   <constructor-arg ref="divConfigBuilder"/> -->         
+       	<!--   <constructor-arg ref="divConfigBuilder"/> -->       	         
     </bean>
         
     <bean id="divConfigBuilder" class="eu.kidf.diversicon.core.DivConfig.Builder">
